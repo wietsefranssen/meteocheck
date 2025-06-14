@@ -198,8 +198,8 @@ if __name__ == '__main__':
     print(checks_df)
 
     # make a dict of column names as location and values as variable names from the checks_df and skip the first column
-    checks_dict = {row[0]: row[1:] for index, row in checks_df.iterrows()}
-    
+    checks_dict = {row.iloc[0]: row.iloc[1:] for index, row in checks_df.iterrows()}
+
     # def get sensorinfo by site and varname combination
     def get_sensorinfo_by_site_and_varname(sites, varname):
     
