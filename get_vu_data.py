@@ -354,12 +354,15 @@ def get_vu_data(check_table, start_dt, end_dt):
     # Rename the first column to 'datetime'
     pivoted_df.rename(columns={pivoted_df.columns[0]: 'datetime'}, inplace=True)
 
-    # Create a dictionary mapping sensor_id to sensor_name from sensor_info
-    sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
+    # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
+    # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
 
-    # Rename the columns in pivoted_df using the mapping
-    pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
+    # # Rename the columns in pivoted_df using the mapping
+    # pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
 
+    # Make index of datetime culumn
+    # pivoted_df['datetime'] = pd.to_datetime(pivoted_df['datetime'])
+    pivoted_df.set_index('datetime', inplace=True)
     # print(sensor_info_df)
     # print(pivoted_df)
     return sensor_info_df, pivoted_df
@@ -386,28 +389,167 @@ if __name__ == '__main__':
     # reset the index of check_table_vudb
     check_table_vudb = check_table_vudb.reset_index(drop=True)
 
+    # Get data from the vu_db database
     sensor_info_df, pivoted_df = get_vu_data(check_table_vudb, start_dt, end_dt)
+
     
+    # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
+    # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
+
+    # # Rename the columns in pivoted_df using the mapping
+    # pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
+
     # make a plotly plot of the data
     import plotly.express as px
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     import plotly.io as pio
     pio.renderers.default = "browser"
     
     # Create a mapping from fullname to unit
-    fullname_to_unit = dict(zip(sensor_info_df['fullname'], sensor_info_df['sensor_units']))
+    # fullname_to_unit = dict(zip(sensor_info_df['fullname'], sensor_info_df['sensor_units']))
+    
+    # Create a mapping from sensor_id to fullname
+    sensor_id_to_fullname = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['fullname']))
+    sensor_id_to_unit = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_units']))
+    sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_name']))
+    # sensor_id_to_aggmethod = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['aggmethod']))
+    # sensor_id_to_site_id = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_id']))
+    sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
+    # make groups of sensor_ids by sensor_name
+    sensor_groups = sensor_info_df.groupby('sensor_name')['sensor_id'].apply(list).to_dict()
+    
+    # List of sensor names
+    sensor_names = list(sensor_groups.keys())
+    
+    # Select sonsor_group with name equal to 'waterlevel'
+    sensor_group = {k: v for k, v in sensor_groups.items() if k == 'MT1_PAR_1_H_180'}
+    
+    ##############################
+    fig = make_subplots(rows=len(sensor_groups), cols=1, shared_xaxes=True, subplot_titles=sensor_names)
+    import plotly
+    print(plotly.__version__)
+    for i, sensor in enumerate(sensor_names, start=1):
+        sensor_group = {k: v for k, v in sensor_groups.items() if k == 'MT1_PAR_1_H_180'}
 
-    fig = go.Figure()
-    for col in pivoted_df.columns[1:]:
-        unit = fullname_to_unit.get(col, "")
-        legend_name = f"{col} [{unit}]" if unit else col
-        fig.add_trace(go.Scatter(
-            x=pivoted_df['datetime'],
-            y=pivoted_df[col],
-            mode='lines',
-            name=legend_name,
-            line=dict(width=1)
-        ))
-    fig.update_layout(title='Sensor Data', xaxis_title='Datetime', yaxis_title='Value')
+        # Get the sensor_ids for the current sensor group
+        sensor_ids = sensor_groups[sensor]
+        # fig.add_trace(
+        #     go.Scatter(x=pivoted_df.index, y=pivoted_df[21401,21409], mode='lines', name=sensor),
+        #     row=i, col=1
+        # )
+        for sensor_id in sensor_ids:  # sensor_id_names: list of columns to plot as sensor_ids
+            unit = sensor_id_to_unit.get(sensor_id, "")
+            fullname = sensor_id_to_fullname.get(sensor_id, "")
+            sitename = sensor_id_to_site_name.get(sensor_id, "")
+            legend_name = f"{sitename} [{unit}]" if unit else col
+            fig.add_trace(
+                go.Scatter(
+                    x=pivoted_df.index,
+                    y=pivoted_df[sensor_id],  # assumes columns like 'sensor1_lineA', 'sensor1_lineB', etc.
+                    mode='lines',
+                    name=legend_name,  # Only the line name for clarity
+                    # showlegend=True,  # Hide global legend
+                    legendgroup=sensor,
+                    legendgrouptitle={'text': sensor}
+                ),
+                row=i, col=1
+            )
+        # Add legend-like annotation for this subplot
+        # legend_items = [f"<span style='color:{go.Figure().layout.colorway[j % len(go.Figure().layout.colorway)]}'>{line}</span>" for j, line in enumerate(sensor_ids)]
+        # fig.add_annotation(
+        #     text=" | ".join(legend_items),
+        #     xref="paper", yref="paper",
+        #     x=1.01, y=1 - (i-1)/len(sensor_names),
+        #     showarrow=False,
+        #     align="left",
+        #     font=dict(size=12),
+        #     bordercolor="black",
+        #     borderwidth=1,
+        #     bgcolor="white"
+        # )
 
+    fig.update_layout(height=300 * len(sensor_names), showlegend=True)
+    # fig.update_layout(
+    #     height=300 * len(sensor_names),
+    #     showlegend=True,
+    #     legend_title="Unit",
+    #     legendgroupclick="toggleitem",  # Controls group click behavior
+    #     legendgrouptitle_text="Unit"    # Title for legend groups
+    # )
+    # fig.update_layout(
+    #     # legendgroupclick="toggleitem",        # or "toggle", "togglegroup"
+    #     legendgrouptitle_text="Unit",         # Title for legend groups
+    #     legend_title="Unit"
+    # )
+    fig.update_xaxes(title_text="Index", row=len(sensor_names), col=1)
+    fig.update_yaxes(title_text="Value")
     fig.show()
+    ##############################
+    
+    
+    ##############################
+    # for sensor in sensor_names:
+    #     fig = go.Figure()
+    #     line_names = sensor_groups[sensor]
+    #     for line in line_names:
+    #         fig.add_trace(
+    #             go.Scatter(
+    #                 x=pivoted_df.index,
+    #                 y=pivoted_df[line],
+    #                 mode='lines',
+    #                 name=line  # This legend is per subplot
+    #             )
+    #         )
+    #     fig.update_layout(
+    #         title=sensor,
+    #         xaxis_title="Index",
+    #         yaxis_title="Value",
+    #         legend_title="Line"
+    #     )
+    #     fig.show()
+    ##############################
+    
+    
+    # # make a list of figures, one for each sensor group
+    # # Create a list to hold the figures for each sensor group
+    # fig_list = []
+
+    # # loop through the sensor_groups and create a new DataFrame for each group
+    # for sensor_name, sensor_ids in sensor_groups.items():
+    #     # Filter the pivoted_df to only include the columns for this sensor group
+    #     group_df = pivoted_df[sensor_ids]
+        
+    #     fig = go.Figure()
+    #     for col in group_df.columns[1:]:
+    #         unit = sensor_id_to_unit.get(col, "")
+    #         fullname = sensor_id_to_fullname.get(col, "")
+    #         # legend_name = f"{col} [mm]"
+    #         legend_name = f"{fullname} [{unit}]" if unit else col
+    #         fig.add_trace(go.Scatter(
+    #             x=pivoted_df.index,
+    #             y=pivoted_df[col],
+    #             mode='lines',
+    #             name=legend_name,
+    #             line=dict(width=1)
+    #         ))
+    #     fig.update_layout(title='Sensor Data', xaxis_title='Datetime', yaxis_title='Value')
+    
+    # # Make subplots for each sensor_group
+    # # Create a figure
+    # fig = go.Figure()
+    # for col in pivoted_df.columns[1:]:
+    #     unit = sensor_id_to_unit.get(col, "")
+    #     fullname = sensor_id_to_fullname.get(col, "")
+    #     # legend_name = f"{col} [mm]"
+    #     legend_name = f"{fullname} [{unit}]" if unit else col
+    #     fig.add_trace(go.Scatter(
+    #         x=pivoted_df.index,
+    #         y=pivoted_df[col],
+    #         mode='lines',
+    #         name=legend_name,
+    #         line=dict(width=1)
+    #     ))
+    # fig.update_layout(title='Sensor Data', xaxis_title='Datetime', yaxis_title='Value')
+
+    # fig.show()
