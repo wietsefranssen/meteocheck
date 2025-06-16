@@ -1,0 +1,16 @@
+name,source
+ALB_MS,wur
+ALB_RF,wur
+ZEG_RF,wur
+MOB_X1,wur
+MOB_X2,wur
+LAW_MS,vu_db
+DEM_NT,vu_db
+ASD_MP,vu_db
+ANK_PT,vu_db
+ZEG_MP,vu_db
+ZEG_PT,vu_db
+ILP_PT,vu_db
+WRW_SR,vu_db
+WRW_OW,vu_db
+ZEG_MOB,vu_db

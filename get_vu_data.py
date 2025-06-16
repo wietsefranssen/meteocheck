@@ -236,6 +236,19 @@ def get_sensorinfo_siteid_name_combo(siteid_names_combo):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
+def get_stations_table(filename='stations.csv'):
+    """ 
+    This function reads the .csv file and returns a DataFrame with the columns and index names
+    """
+    # Read in .csv file 
+    data = pd.read_csv(filename)
+    
+    # Remove any leading or trailing whitespace from the column names
+    data.columns = data.columns.str.strip()
+
+    result_df = pd.DataFrame(data)
+    return result_df
+
 def get_check_table(filename='check_table.csv'):
     """ 
     This function reads the check_table.csv file and returns a DataFrame with the columns and index names
@@ -300,20 +313,7 @@ def get_sensorinfo_by_site_and_varname(check_table):
         
     return sensor_info
 
-
-
-if __name__ == '__main__':
-  
-    # Define end_date as today
-    end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
-    
-    # Define start_date as 7 days before today
-    start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
-    start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
-    
-    # Get the check_table
-    check_table = get_check_table()
-
+def get_vu_data(check_table, start_dt, end_dt):
     # Get the sensor_info by site and varname combination
     sensor_info = get_sensorinfo_by_site_and_varname(check_table)
         
@@ -362,7 +362,32 @@ if __name__ == '__main__':
 
     # print(sensor_info_df)
     # print(pivoted_df)
+    return sensor_info_df, pivoted_df
 
+if __name__ == '__main__':
+  
+    # Define end_date as today
+    end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
+    
+    # Define start_date as 7 days before today
+    start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+    start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
+    
+    # Get the variables_table
+    stations_table = get_stations_table("stations.csv")
+    
+    # Get the check_table
+    check_table = get_check_table()
+    
+    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'vu_db' in the Variable column from stations_table
+    matching_names = stations_table.loc[stations_table['source'] == 'vu_db', 'name'].unique()
+    check_table_vudb = check_table[check_table['Station'].isin(matching_names)]
+    
+    # reset the index of check_table_vudb
+    check_table_vudb = check_table_vudb.reset_index(drop=True)
+
+    sensor_info_df, pivoted_df = get_vu_data(check_table_vudb, start_dt, end_dt)
+    
     # make a plotly plot of the data
     import plotly.express as px
     import plotly.graph_objects as go
@@ -386,4 +411,3 @@ if __name__ == '__main__':
     fig.update_layout(title='Sensor Data', xaxis_title='Datetime', yaxis_title='Value')
 
     fig.show()
-    
