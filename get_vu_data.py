@@ -4,14 +4,13 @@ from get_dbstring import get_dbstring
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
-
 from vudb import get_sensor_units
-# from vudb import fix_start_end_dt
+
 def get_siteids(shortname):
     db_string = get_dbstring(shortname)    
 
     """ Retrieve data from the vendors table """
-    config  = load_config()
+    config  = load_config(filename='database.ini', section='postgresql_vu')
     try:
         with psycopg2.connect(**config) as conn:
             with conn.cursor() as cur:
@@ -37,7 +36,7 @@ def get_sensorids(siteid, varname=None):
     varname_db_string = get_dbstring(varname)    
 
     """ Retrieve data from the vendors table """
-    config  = load_config()
+    config  = load_config(filename='database.ini', section='postgresql_vu')
     checkk = 0
     try:
         with psycopg2.connect(**config) as conn:
@@ -65,7 +64,7 @@ def get_data(sensorid, start_dt, end_dt):
     sensorid_db_string = get_dbstring(sensorid)      
 
     """ Retrieve data from the vendors table """
-    config  = load_config()
+    config  = load_config(filename='database.ini', section='postgresql_vu')
     try:
         with psycopg2.connect(**config) as conn:
             # with conn.cursor() as cur:
@@ -118,7 +117,7 @@ def get_sensorinfo(siteid, names):
     siteid_db_string = get_dbstring(siteid)      
 
     """ Retrieve data from the vendors table """
-    config  = load_config()
+    config  = load_config(filename='database.ini', section='postgresql_vu')
     try:
         with psycopg2.connect(**config) as conn:
             # with conn.cursor() as cur:
@@ -183,7 +182,7 @@ def get_sensorinfo_siteid_name_combo(siteid_names_combo):
     # siteid_names_combo_string = get_dbstring(siteid_names_combo)
 
     """ Retrieve data from the vendors table """
-    config  = load_config()
+    config  = load_config(filename='database.ini', section='postgresql_vu')
     try:
         with psycopg2.connect(**config) as conn:
             # with conn.cursor() as cur:
@@ -203,21 +202,6 @@ def get_sensorinfo_siteid_name_combo(siteid_names_combo):
                 # sensor_ids = [row['sensor_id'] for row in sensor_info_result]
                 unit_ids = [row['unit_id'] for row in sensor_info_result]
 
-                # data_result = cur.fetchall()
-              
-                  # Get sensor units
-                sensor_units = get_sensor_units(cur, unit_ids)  
-
-                # Add sensor units to sensor_info_result
-                for i, row in enumerate(sensor_info_result):
-                    unit_id = row['unit_id']
-                    # Find the corresponding unit from sensor_units
-                    unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
-                    if unit_row:
-                        sensor_info_result[i]['sensor_units'] = unit_row['unit']
-                    else:
-                        sensor_info_result[i]['sensor_units'] = None  # or some default value
-
                 # Get sensor units
                 sensor_units = get_sensor_units(cur, unit_ids)  
 
@@ -227,9 +211,9 @@ def get_sensorinfo_siteid_name_combo(siteid_names_combo):
                     # Find the corresponding unit from sensor_units
                     unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
                     if unit_row:
-                        sensor_info_result[i]['sensor_units'] = unit_row['unit']
+                        sensor_info_result[i]['unit'] = unit_row['unit']
                     else:
-                        sensor_info_result[i]['sensor_units'] = None  # or some default value
+                        sensor_info_result[i]['unit'] = None  # or some default value
 
                 return sensor_info_result
 
@@ -267,6 +251,30 @@ def get_check_table(filename='check_table.csv'):
         for col in check_table.columns:
             if check_table.loc[idx, col] == 'x':
                 result.append({'Station': col, 'Variable': idx})
+
+    result_df = pd.DataFrame(result)
+    return result_df
+
+def get_check_table2(filename='check_table.csv'):
+    """ 
+    This function reads the check_table.csv file and returns a DataFrame with the columns and index names
+    where the value is 'x'.
+    """
+    # Read in check_table.csv file 
+    check_table = pd.read_csv(filename, index_col=0, sep=';')
+    
+    # Remove any leading or trailing whitespace from the column names
+    check_table.columns = check_table.columns.str.strip()
+    # Remove any leading or trailing whitespace from the index names
+    check_table.index = check_table.index.str.strip()
+    
+    result = []
+    for idx in check_table.index:
+        for col in check_table.columns:
+            # Check if not empty or NaN or None or 0
+            if pd.notna(check_table.loc[idx, col]) and check_table.loc[idx, col] != '' and check_table.loc[idx, col] != 0:
+            # if check_table.loc[idx, col] == 'x':
+                result.append({'Station': idx, 'Variable': check_table.loc[idx, col],'Variable_name': col})
 
     result_df = pd.DataFrame(result)
     return result_df
@@ -311,7 +319,33 @@ def get_sensorinfo_by_site_and_varname(check_table):
         # Combine site_name and sensor_name
         sensor_info[i]['fullname'] = f"{site_name}_{sensor_name}"
         
+    # Add Variable_name column to sensor_info by using the Variable column from check_table
+    for i, row in enumerate(sensor_info):
+        varname = check_table.loc[check_table['Variable'] == row['sensor_name'], 'Variable_name'].values
+        if len(varname) > 0:
+            sensor_info[i]['variable_name'] = varname[0]
+        else:
+            sensor_info[i]['variable_name'] = None
+        
+    # Add source to sensor_info
+    for i, row in enumerate(sensor_info):
+        sensor_info[i]['source'] = 'vu_db'
+    
     return sensor_info
+
+
+def get_check_table_db(source = 'wur_db', check_table_filename='check_table_new.csv'):
+    # Get the check_table
+    check_table = get_check_table2(check_table_filename)
+
+    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'vu_db' in the Variable column from stations_table
+    matching_names = stations_table.loc[stations_table['source'] == source, 'name'].unique()
+    check_table_db = check_table[check_table['Station'].isin(matching_names)]
+
+    # reset the index of check_table_vudb
+    check_table_db = check_table_db.reset_index(drop=True)
+
+    return check_table_db
 
 def get_vu_data(check_table, start_dt, end_dt):
     # Get the sensor_info by site and varname combination
@@ -326,8 +360,8 @@ def get_vu_data(check_table, start_dt, end_dt):
         print("The following items in the check_table are not found in the sensor_info:")
         print(missing_items[['Station', 'Variable']])
 
-    # Get the sensor_ids from sensor_info
-    sensorids = [row['sensor_id'] for row in sensor_info]
+    # Get the sensor_ids from sensor_info_df
+    sensorids = sensor_info_df['sensor_id'].tolist()
     
     # Get the sensor data from the database
     data = get_data(sensorids, start_dt, end_dt)
@@ -367,108 +401,225 @@ def get_vu_data(check_table, start_dt, end_dt):
     # print(pivoted_df)
     return sensor_info_df, pivoted_df
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
   
-    # Define end_date as today
-    end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
-    
-    # Define start_date as 7 days before today
-    start_dt = (pd.to_datetime('today') - pd.DateOffset(days=14)).strftime('%Y-%m-%d')
-    start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
-    
-    # Get the variables_table
-    stations_table = get_stations_table("stations.csv")
-    
-    # Get the check_table
-    check_table = get_check_table()
-    
-    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'vu_db' in the Variable column from stations_table
-    matching_names = stations_table.loc[stations_table['source'] == 'vu_db', 'name'].unique()
-    check_table_vudb = check_table[check_table['Station'].isin(matching_names)]
-    
-    # reset the index of check_table_vudb
-    check_table_vudb = check_table_vudb.reset_index(drop=True)
+# Define end_date as today
+end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
 
-    # Get data from the vu_db database
-    sensor_info_df, pivoted_df = get_vu_data(check_table_vudb, start_dt, end_dt)
+# Define start_date as 7 days before today
+start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
 
+# Get the variables_table
+stations_table = get_stations_table("stations.csv")
+
+####### WUR DB DATA RETRIEVAL #######
+# Get the check_table
+check_table_wurdb = get_check_table_db(source = 'wur_db')
+
+
+#############################
+from wurdb import get_sensorinfo_by_site_and_varname_wur
+from wurdb import get_data_wur
+def get_wur_data(check_table, start_dt, end_dt):
     
+    # Get the sensor_info by site and varname combination
+    sensor_info_df = get_sensorinfo_by_site_and_varname_wur(check_table)
+        
+    # Check if all items od check_table are in sensor_info_df
+    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensor_info_df.set_index(['site_name', 'sensor_name']).index)]
+    if not missing_items.empty:
+        print("The following items in the check_table are not found in the sensor_info:")
+        print(missing_items[['Station', 'Variable']])
+
+    # Get the sensor_ids from sensor_info_df
+    sensorids = sensor_info_df['sensor_id'].tolist()
+    
+    # Get the sensor data from the database
+    data = get_data_wur(sensorids, start_dt, end_dt)
+
+    # Pivot the DataFrame
+    pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
+
+    # Add columns that are not in the pivoted_df but are in the sensor_info
+    for i, row in sensor_info_df.iterrows():
+        # Get the logicid from sensor_info_df
+        logicid = row['sensor_id']
+        if logicid not in pivoted_df.columns:
+            # Create a new column with NaN values
+            pivoted_df[logicid] = np.nan
+
+    # Put the columns in the same order as in sensor_info
+    pivoted_df = pivoted_df[sensorids]
+
+    # Reset the column names (optional, to remove the MultiIndex)
+    pivoted_df.columns.name = None
+    
+    # Make index of pivoted_df into a column
+    pivoted_df.reset_index(inplace=True)
+    
+    # Rename the first column to 'datetime'
+    pivoted_df.rename(columns={pivoted_df.columns[0]: 'datetime'}, inplace=True)
+
     # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
     # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
 
     # # Rename the columns in pivoted_df using the mapping
     # pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
 
-    # make a plotly plot of the data
-    # import plotly.express as px
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    # import plotly.io as pio
-    # pio.renderers.default = "browser"
-    
-    # Create a mapping from fullname to unit
-    # fullname_to_unit = dict(zip(sensor_info_df['fullname'], sensor_info_df['sensor_units']))
-    
-    # Create a mapping from sensor_id to fullname
-    sensor_id_to_fullname = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['fullname']))
-    sensor_id_to_unit = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_units']))
-    sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_name']))
-    # sensor_id_to_aggmethod = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['aggmethod']))
-    # sensor_id_to_site_id = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_id']))
-    sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
-    # make groups of sensor_ids by sensor_name
-    sensor_groups = sensor_info_df.groupby('sensor_name')['sensor_id'].apply(list).to_dict()
-    
-    # List of sensor names
-    sensor_names = list(sensor_groups.keys())
-    
-    downsample_factor = 1  # Adjust this value to control the downsampling rate
-    shared_x = pivoted_df.index[::downsample_factor]
-    figures = []
-    for sensor in sensor_names:
-        fig = go.Figure()
-        sensor_group = {k: v for k, v in sensor_groups.items() if k == 'MT1_PAR_1_H_180'}
-        # Get the sensor_ids for the current sensor group
-        sensor_ids = sensor_groups[sensor]
+    # Make index of datetime culumn
+    # pivoted_df['datetime'] = pd.to_datetime(pivoted_df['datetime'])
+    pivoted_df.set_index('datetime', inplace=True)
+    # print(sensor_info_df)
+    # print(pivoted_df)
+    return sensor_info_df, pivoted_df
+#############################
+# Get data from the database
+sensor_info_df_wur, pivoted_df_wur = get_wur_data(check_table_wurdb, start_dt, end_dt)
 
-        for sensor_id in sensor_ids:
-            # unit = units[line]
-            unit = sensor_id_to_unit.get(sensor_id, "")
-    #         fullname = sensor_id_to_fullname.get(sensor_id, "")
-            sitename = sensor_id_to_site_name.get(sensor_id, "")
-    #         legend_name = f"{sitename} [{unit}]" if unit else col
-    #         
-            fig.add_trace(
-                go.Scattergl(
-                    x=shared_x,  # Plot every 10th point for performance
-                    y=pivoted_df[sensor_id],
-                    mode='markers+lines',
-                    name=f"{sitename} ({unit})",
-                    line=dict(width=1),
-                    marker=dict(size=3)  # Adjust marker size for better visibility
-                )
+####### VU DB DATA RETRIEVAL #######
+# Get the check_table
+check_table_vudb = get_check_table_db(source = 'vu_db')
+
+# Get data from the vu_db database
+sensor_info_df_vu, pivoted_df_vu = get_vu_data(check_table_vudb, start_dt, end_dt)
+
+# Combine the two DataFrames
+pivoted_df = pd.concat([pivoted_df_wur, pivoted_df_vu], axis=1)
+# Combine the two sensor_info DataFrames
+sensor_info_df = pd.concat([sensor_info_df_wur, sensor_info_df_vu], ignore_index=True)
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Create a mapping from sensor_id to various attributes
+# sensor_id_to_fullname = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['fullname']))
+sensor_id_to_unit = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['unit']))
+sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_name']))
+sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
+sensor_id_to_variable_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['variable_name']))
+
+# # make groups of sensor_ids by sensor_name
+# sensor_groups = sensor_info_df.groupby('sensor_name')['sensor_id'].apply(list).to_dict()
+
+# make groups of sensor_ids by variable_name
+sensor_groups = sensor_info_df.groupby('variable_name')['sensor_id'].apply(list).to_dict()
+
+# List of sensor names
+sensor_names = list(sensor_groups.keys())
+
+downsample_factor = 30  # Adjust this value to control the downsampling rate
+shared_x = pivoted_df.index[::downsample_factor]
+pivoted_df = pivoted_df[::downsample_factor]
+# Set x_range to the full range of the index
+x_range = [shared_x.min(), shared_x.max()]
+
+# for sensor in sensor_names:
+def make_figure(sensor, x_range=None, y_range=None):
+    fig = go.Figure()
+
+    # Get the sensor_ids for the current sensor group
+    sensor_ids = sensor_groups[sensor]
+
+    for sensor_id in sensor_ids:
+        # unit = units[line]
+        unit = sensor_id_to_unit.get(sensor_id, "")
+#         fullname = sensor_id_to_fullname.get(sensor_id, "")
+        sitename = sensor_id_to_site_name.get(sensor_id, "")
+        sensor_name = sensor_id_to_sensor_name.get(sensor_id, "")
+        var_name = sensor_id_to_variable_name.get(sensor_id, "")
+        fig.add_trace(
+            go.Scattergl(
+                x=shared_x,  # Plot every 10th point for performance
+                # x=pivoted_df.index,
+                y=pivoted_df[sensor_id],
+                mode='markers+lines',
+                name=f"{sitename} ({sensor_name})",
+                line=dict(width=1),
+                marker=dict(size=3)  # Adjust marker size for better visibility
             )
-        fig.update_layout(
-            title=f"{sensor.capitalize()} Data",
-            xaxis_title="timedate",
-            yaxis_title=unit if unit else "Value",
-            legend_title="Measurement",
-            xaxis=dict(range=[shared_x.min(), shared_x.max()])
         )
-        figures.append(fig)
-
-        
+    fig.update_layout(
+        # title=f"{sensor.capitalize()} Data",
+        title=f"{var_name}",
+        xaxis_title="timedate",
+        yaxis_title=unit if unit else "Value",
+        legend_title="Measurement"
+    )
+    # if x_range:
+    #     fig.update_xaxes(range=x_range)
     
-    ###############################
-    import dash
-    from dash import dcc, html  
-    # Dash app
-    app = dash.Dash(__name__)
+    if x_range:
+        fig.update_xaxes(range=x_range)
+    else:
+        fig.update_xaxes(autorange=True)
 
-    app.layout = html.Div([
-        html.H2("Sensor Data (Three Separate Plots)"),
-        *[dcc.Graph(figure=fig) for fig in figures]
+
+    return fig
+
+    
+
+###############################
+import dash
+from dash import dcc, html, Input, Output, State, ctx
+
+# Number of sensor names/subplots
+nfigs = len(sensor_names)
+
+# Dash app
+app = dash.Dash(__name__)
+
+app.layout = html.Div([
+    html.H2("Sensor Data"),
+    dcc.Store(id='zoom-store', data={}),
+    html.Div([
+        dcc.Graph(id=f'graph-{i}', figure=make_figure(sensor_names[i], x_range=x_range))
+        for i in range(nfigs)
     ])
 
-    if __name__ == "__main__":
-        app.run_server(debug=True)
+])
+
+# Callback to synchronize zoom/pan across all graphs
+@app.callback(
+    [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
+    [Input(f'graph-{i}', 'relayoutData') for i in range(nfigs)],
+    [State(f'graph-{i}', 'figure') for i in range(nfigs)],
+    prevent_initial_call=True
+)
+def sync_zoom(*args):
+    relayout_datas = args[:nfigs]
+    figs = args[nfigs:]
+
+    # store = args[-1] or {}
+    # x_range = store.get('x_range')
+
+    # Find the most recent relayoutData with an xaxis/yaxis range
+    x_range = None
+    for relayout in relayout_datas:
+        if relayout:
+            # Handle double-click zoom out
+            if relayout.get('xaxis.autorange') is True:
+                x_range = None
+                break
+            elif 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
+                x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
+            elif 'xaxis' in relayout and 'range' in relayout['xaxis']:
+                x_range = relayout['xaxis']['range']
+            elif x_range:
+                break
+
+    # If no zoom/pan, return original figures
+    if not x_range:
+        return figs
+
+    # Update only the axis range in the existing figures
+    new_figs = []
+    for fig in figs:
+        fig = fig.copy()  # Avoid mutating state
+        if x_range:
+            fig['layout']['xaxis']['range'] = x_range
+        new_figs.append(fig)
+    return new_figs
+
+if __name__ == "__main__":
+    app.run_server(debug=True)

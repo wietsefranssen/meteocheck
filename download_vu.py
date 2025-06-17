@@ -38,7 +38,7 @@ def load_biomet_vudb(site, names, start_dt, end_dt, tz):
     Connect to PostgreSQL database and retrieve data.
     """
     # Database connection parameters
-    db_config = load_config()
+    db_config = load_config(filename='database.ini', section='postgresql_vu')
 
     try:
         # Establish connection
