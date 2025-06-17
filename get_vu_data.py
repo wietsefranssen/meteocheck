@@ -498,7 +498,7 @@ sensor_id_to_unit = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['unit']
 sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_name']))
 sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
 sensor_id_to_variable_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['variable_name']))
-
+sensor_id_to_source = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['source']))
 # # make groups of sensor_ids by sensor_name
 # sensor_groups = sensor_info_df.groupby('sensor_name')['sensor_id'].apply(list).to_dict()
 
@@ -514,13 +514,18 @@ pivoted_df = pivoted_df[::downsample_factor]
 # Set x_range to the full range of the index
 # x_range = [shared_x.min(), shared_x.max()]
 
+import plotly.colors
+# Assign colors dynamically using Plotly's color sequence
+
+sitenames = sorted(sensor_info_df['site_name'].unique())
+color_seq = plotly.colors.qualitative.Plotly
+sensor_color_map = {sensor: color_seq[i % len(color_seq)] for i, sensor in enumerate(sitenames)}
+
 # for sensor in sensor_names:
 def make_figure(sensor, x_range=None, y_range=None):
     fig = go.Figure()
-
     # Get the sensor_ids for the current sensor group
     sensor_ids = sensor_groups[sensor]
-
     for sensor_id in sensor_ids:
         # unit = units[line]
         unit = sensor_id_to_unit.get(sensor_id, "")
@@ -528,15 +533,18 @@ def make_figure(sensor, x_range=None, y_range=None):
         sitename = sensor_id_to_site_name.get(sensor_id, "")
         sensor_name = sensor_id_to_sensor_name.get(sensor_id, "")
         var_name = sensor_id_to_variable_name.get(sensor_id, "")
+        source = sensor_id_to_source.get(sensor_id, "")
         fig.add_trace(
             go.Scattergl(
                 x=shared_x,  # Plot every 10th point for performance
                 # x=pivoted_df.index,
                 y=pivoted_df[sensor_id],
                 mode='markers+lines',
-                name=f"{sitename} ({sensor_name})",
-                line=dict(width=1),
-                marker=dict(size=3)  # Adjust marker size for better visibility
+                name=f"{sitename} ({source}: {sensor_name})",
+                line=dict(width=1,
+                          color=sensor_color_map[sitename]),
+                marker=dict(size=3,
+                            color=sensor_color_map[sitename])  # Adjust marker size for better visibility
             )
         )
     fig.update_layout(
