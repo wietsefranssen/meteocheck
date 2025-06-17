@@ -512,7 +512,7 @@ downsample_factor = 30  # Adjust this value to control the downsampling rate
 shared_x = pivoted_df.index[::downsample_factor]
 pivoted_df = pivoted_df[::downsample_factor]
 # Set x_range to the full range of the index
-x_range = [shared_x.min(), shared_x.max()]
+# x_range = [shared_x.min(), shared_x.max()]
 
 # for sensor in sensor_names:
 def make_figure(sensor, x_range=None, y_range=None):
@@ -546,9 +546,7 @@ def make_figure(sensor, x_range=None, y_range=None):
         yaxis_title=unit if unit else "Value",
         legend_title="Measurement"
     )
-    # if x_range:
-    #     fig.update_xaxes(range=x_range)
-    
+
     if x_range:
         fig.update_xaxes(range=x_range)
     else:
@@ -566,60 +564,60 @@ from dash import dcc, html, Input, Output, State, ctx
 # Number of sensor names/subplots
 nfigs = len(sensor_names)
 
-# Dash app
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
-    html.H2("Sensor Data"),
-    dcc.Store(id='zoom-store', data={}),
+    dcc.Store(id='zoom-store', data={'x_range': None}),
     html.Div([
-        dcc.Graph(id=f'graph-{i}', figure=make_figure(sensor_names[i], x_range=x_range))
+        dcc.Graph(id=f'graph-{i}', figure=make_figure(sensor_names[i]))
         for i in range(nfigs)
     ])
-
 ])
 
-# Callback to synchronize zoom/pan across all graphs
 @app.callback(
-    [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
+    Output('zoom-store', 'data'),
     [Input(f'graph-{i}', 'relayoutData') for i in range(nfigs)],
-    [State(f'graph-{i}', 'figure') for i in range(nfigs)],
+    State('zoom-store', 'data'),
     prevent_initial_call=True
 )
-def sync_zoom(*args):
-    relayout_datas = args[:nfigs]
-    figs = args[nfigs:]
+def update_zoom_store(*args):
+    relayout_datas = args[:-1]
+    store = args[-1] or {}
+    x_range = store.get('x_range')
+    new_x_range = x_range
 
-    # store = args[-1] or {}
-    # x_range = store.get('x_range')
+    # Use dash.callback_context (ctx) to find which graph triggered
+    triggered = ctx.triggered_id
+    if triggered is None:
+        return dash.no_update
 
-    # Find the most recent relayoutData with an xaxis/yaxis range
-    x_range = None
-    for relayout in relayout_datas:
+    # Extract the index from the triggered id
+    if triggered.startswith('graph-'):
+        idx = int(triggered.split('-')[1])
+        relayout = relayout_datas[idx]
         if relayout:
-            # Handle double-click zoom out
-            if relayout.get('xaxis.autorange') is True:
-                x_range = None
-                break
-            elif 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
-                x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
+            # Zoom in
+            if 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
+                new_x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
             elif 'xaxis' in relayout and 'range' in relayout['xaxis']:
-                x_range = relayout['xaxis']['range']
-            elif x_range:
-                break
+                new_x_range = relayout['xaxis']['range']
+            # Double-click zoom out
+            elif relayout.get('xaxis.autorange') is True:
+                new_x_range = None
 
-    # If no zoom/pan, return original figures
-    if not x_range:
-        return figs
+    # Only update if the range actually changed
+    if new_x_range != x_range:
+        return {'x_range': new_x_range}
+    else:
+        return dash.no_update
 
-    # Update only the axis range in the existing figures
-    new_figs = []
-    for fig in figs:
-        fig = fig.copy()  # Avoid mutating state
-        if x_range:
-            fig['layout']['xaxis']['range'] = x_range
-        new_figs.append(fig)
-    return new_figs
+@app.callback(
+    [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
+    Input('zoom-store', 'data')
+)
+def update_graphs(zoom_data):
+    x_range = zoom_data.get('x_range') if zoom_data else None
+    return [make_figure(sensor_names[i], x_range) for i in range(nfigs)]
 
 if __name__ == "__main__":
     app.run_server(debug=True)
