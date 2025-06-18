@@ -225,7 +225,7 @@ def get_stations_table(filename='stations.csv'):
     This function reads the .csv file and returns a DataFrame with the columns and index names
     """
     # Read in .csv file 
-    data = pd.read_csv(filename)
+    data = pd.read_csv(filename, sep=';')
     
     # Remove any leading or trailing whitespace from the column names
     data.columns = data.columns.str.strip()
@@ -338,7 +338,7 @@ def get_check_table_db(source = 'wur_db', check_table_filename='check_table_new.
     # Get the check_table
     check_table = get_check_table2(check_table_filename)
 
-    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'vu_db' in the Variable column from stations_table
+    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'source' in the Variable column from stations_table
     matching_names = stations_table.loc[stations_table['source'] == source, 'name'].unique()
     check_table_db = check_table[check_table['Station'].isin(matching_names)]
 
@@ -438,8 +438,13 @@ def get_wur_data(check_table, start_dt, end_dt):
     # Get the sensor data from the database
     data = get_data_wur(sensorids, start_dt, end_dt)
 
+    # Remove duplicates based on 'dt' and 'logicid' to ensure unique entries
+    data_nodup = data.drop_duplicates(subset=['dt', 'logicid'])
+    pivoted_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
+
     # Pivot the DataFrame
-    pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
+    pivoted_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
+    # pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
 
     # Add columns that are not in the pivoted_df but are in the sensor_info
     for i, row in sensor_info_df.iterrows():
@@ -499,6 +504,8 @@ sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df[
 sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
 sensor_id_to_variable_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['variable_name']))
 sensor_id_to_source = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['source']))
+
+
 # # make groups of sensor_ids by sensor_name
 # sensor_groups = sensor_info_df.groupby('sensor_name')['sensor_id'].apply(list).to_dict()
 
@@ -526,8 +533,16 @@ def make_figure(sensor, x_range=None, y_range=None):
     fig = go.Figure()
     # Get the sensor_ids for the current sensor group
     sensor_ids = sensor_groups[sensor]
+    
+    # Sort sensor_ids based on site_name
+    sensor_ids = sorted(
+        sensor_ids,
+        key=lambda sensor_id: sensor_id_to_site_name.get(sensor_id, "")
+    )
+# pivoted_df = pivoted_df[sorted_columns]
     for sensor_id in sensor_ids:
         # unit = units[line]
+        # pivoted_df[sensor_id].min()
         unit = sensor_id_to_unit.get(sensor_id, "")
 #         fullname = sensor_id_to_fullname.get(sensor_id, "")
         sitename = sensor_id_to_site_name.get(sensor_id, "")
@@ -550,9 +565,9 @@ def make_figure(sensor, x_range=None, y_range=None):
     fig.update_layout(
         # title=f"{sensor.capitalize()} Data",
         title=f"{var_name}",
-        xaxis_title="timedate",
+        # xaxis_title="timedate",
         yaxis_title=unit if unit else "Value",
-        legend_title="Measurement"
+        legend_title="Measurement",
     )
 
     if x_range:
@@ -560,6 +575,17 @@ def make_figure(sensor, x_range=None, y_range=None):
     else:
         fig.update_xaxes(autorange=True)
 
+
+    # # Set y_range to the min and max of all sensor_ids in the current sensor group
+    # y_range = [pivoted_df[sensor_ids].min().min(), pivoted_df[sensor_ids].max().max()]
+    # if y_range:
+    #     # print(f"Setting y-axis range for {var_name}: {y_range}")
+    #     print(f"Setting y-axis: {y_range}"  )
+    #     fig.update_yaxes(autorange=False)
+    #     fig.update_yaxes(range=y_range)
+    # else:
+    #     print(f"No y-axis range set for {var_name}, using autorange")
+    #     fig.update_yaxes(autorange=True)
 
     return fig
 
@@ -582,50 +608,50 @@ app.layout = html.Div([
     ])
 ])
 
-@app.callback(
-    Output('zoom-store', 'data'),
-    [Input(f'graph-{i}', 'relayoutData') for i in range(nfigs)],
-    State('zoom-store', 'data'),
-    prevent_initial_call=True
-)
-def update_zoom_store(*args):
-    relayout_datas = args[:-1]
-    store = args[-1] or {}
-    x_range = store.get('x_range')
-    new_x_range = x_range
+# @app.callback(
+#     Output('zoom-store', 'data'),
+#     [Input(f'graph-{i}', 'relayoutData') for i in range(nfigs)],
+#     State('zoom-store', 'data'),
+#     prevent_initial_call=True
+# )
+# def update_zoom_store(*args):
+#     relayout_datas = args[:-1]
+#     store = args[-1] or {}
+#     x_range = store.get('x_range')
+#     new_x_range = x_range
 
-    # Use dash.callback_context (ctx) to find which graph triggered
-    triggered = ctx.triggered_id
-    if triggered is None:
-        return dash.no_update
+#     # Use dash.callback_context (ctx) to find which graph triggered
+#     triggered = ctx.triggered_id
+#     if triggered is None:
+#         return dash.no_update
 
-    # Extract the index from the triggered id
-    if triggered.startswith('graph-'):
-        idx = int(triggered.split('-')[1])
-        relayout = relayout_datas[idx]
-        if relayout:
-            # Zoom in
-            if 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
-                new_x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
-            elif 'xaxis' in relayout and 'range' in relayout['xaxis']:
-                new_x_range = relayout['xaxis']['range']
-            # Double-click zoom out
-            elif relayout.get('xaxis.autorange') is True:
-                new_x_range = None
+#     # Extract the index from the triggered id
+#     if triggered.startswith('graph-'):
+#         idx = int(triggered.split('-')[1])
+#         relayout = relayout_datas[idx]
+#         if relayout:
+#             # Zoom in
+#             if 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
+#                 new_x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
+#             elif 'xaxis' in relayout and 'range' in relayout['xaxis']:
+#                 new_x_range = relayout['xaxis']['range']
+#             # Double-click zoom out
+#             elif relayout.get('xaxis.autorange') is True:
+#                 new_x_range = None
 
-    # Only update if the range actually changed
-    if new_x_range != x_range:
-        return {'x_range': new_x_range}
-    else:
-        return dash.no_update
+#     # Only update if the range actually changed
+#     if new_x_range != x_range:
+#         return {'x_range': new_x_range}
+#     else:
+#         return dash.no_update
 
-@app.callback(
-    [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
-    Input('zoom-store', 'data')
-)
-def update_graphs(zoom_data):
-    x_range = zoom_data.get('x_range') if zoom_data else None
-    return [make_figure(sensor_names[i], x_range) for i in range(nfigs)]
+# @app.callback(
+#     [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
+#     Input('zoom-store', 'data')
+# )
+# def update_graphs(zoom_data):
+#     x_range = zoom_data.get('x_range') if zoom_data else None
+#     return [make_figure(sensor_names[i], x_range) for i in range(nfigs)]
 
 if __name__ == "__main__":
     app.run_server(debug=True)
