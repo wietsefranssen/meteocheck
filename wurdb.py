@@ -4,7 +4,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 
-def get_data_wur(sensorid, start_dt, end_dt):
+def get_data_wur2(sensorid, start_dt, end_dt):
     sensorid_db_string = get_dbstring(sensorid)      
 
     """ Retrieve data from the vendors table """
