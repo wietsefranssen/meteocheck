@@ -4,31 +4,64 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
+import os
 
-def get_siteids_vu(shortname):
-    db_string = get_dbstring(shortname)    
-
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
+def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
+    """
+    Run a query on the PostgreSQL database and return the results.
+    
+    Parameters:
+    - query: SQL query string to execute.
+    - params: Optional parameters for the query.
+    
+    Returns:
+    - List of rows returned by the query.
+    """
+    config = load_config(filename=config_file, section=config_section)
+    
     try:
         with psycopg2.connect(**config) as conn:
-            with conn.cursor() as cur:
-              query = f"""
-              SELECT id AS site_id, shortname AS name
-              FROM cdr.sites
-              WHERE shortname IN ({db_string})
-              """
-              cur.execute(query, ())
-              rows = cur.fetchall()
-            #   print("The number of parts: ", cur.rowcount)
-            #   for row in rows:
-            #       print(row)
-                
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                df = pd.DataFrame(rows)
+
+                return df
+            
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
-        
-    # Return the site IDs    
-    return [row[0] for row in rows], rows
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+def get_sensorinfo_wur(shortname):
+    
+    db_string = get_dbstring(shortname)    
+
+    query = f"""
+    SELECT id AS sensor_id, name AS sensor_name, unit AS unit, stationname AS site_name
+    FROM sensors
+    WHERE stationname IN ({db_string})
+    """
+              
+    result = run_pg_query(query, config_section='postgresql_wur')
+    
+    return result
+
+def get_siteids_vu(shortname):
+
+    db_string = get_dbstring(shortname)    
+
+    query = f"""
+    SELECT id AS site_id, shortname AS name
+    FROM cdr.sites
+    WHERE shortname IN ({db_string})
+    """
+  
+    result = run_pg_query(query, config_section='postgresql_vu')
+
+    return result
 
 def get_sensorids_vu(siteid, varname=None):
     siteid_db_string = get_dbstring(siteid)    
@@ -162,6 +195,9 @@ def get_sensorinfo_siteid_name_combo_vu(siteid_names_combo):
                     else:
                         sensor_info_result[i]['unit'] = None  # or some default value
 
+                # Convert to DataFrame
+                sensor_info_result = pd.DataFrame(sensor_info_result)
+                
                 return sensor_info_result
 
     except (Exception, psycopg2.DatabaseError) as error:
@@ -173,10 +209,10 @@ def get_sensorinfo_by_site_and_varname_vu(check_table):
     sites = check_table['Station'].unique().tolist()
     
     # Get the siteid and siteid_name from the database
-    siteid, siteid_name = get_siteids_vu(sites)
-    
-    # Match the Station names in check_table with the siteid_name and add a new column 'siteid' integer to check_table as integer values        
-    check_table['siteid'] = check_table['Station'].map(dict(zip([s[1] for s in siteid_name], siteid)))
+    siteid_name = get_siteids_vu(sites)
+        
+    # Match the 'Station' in check_table with the 'name' in siteid_name2 and add a new column 'siteid' to check_table with matched site_id values 
+    check_table['siteid'] = check_table['Station'].map(dict(zip(siteid_name['name'], siteid_name['site_id'])))
 
     # Conert NaN values in the siteid column to -9999 and make in integer
     check_table['siteid'] = check_table['siteid'].fillna(-9999).astype(int)
@@ -187,38 +223,18 @@ def get_sensorinfo_by_site_and_varname_vu(check_table):
     # make a list of tuples (siteid, varname) from siteid_varname
     siteid_varname = [tuple(x) for x in siteid_varname.to_numpy()]
     
-    sensor_info = get_sensorinfo_siteid_name_combo_vu(siteid_varname)
-    # print(sensor_info)
-    # add a sitename column to sensor_info by using siteid_name as mapping (column 0 is site_id, and column 1 is site_name)
-    for i, row in enumerate(sensor_info):
-        site_id = row['site_id']
-        # Find the corresponding site name from siteid_name
-        site_row = next((s for s in siteid_name if s[0] == site_id), None)
-        if site_row:
-            sensor_info[i]['site_name'] = site_row[1]
-        else:
-            sensor_info[i]['site_name'] = None
-    
-    # Add a fullname column to sensor_info by combining site_name and sensor_name
-    for i, row in enumerate(sensor_info):
-        site_name = row['site_name']
-        sensor_name = row['sensor_name']
-        # Combine site_name and sensor_name
-        sensor_info[i]['fullname'] = f"{site_name}_{sensor_name}"
+    sensor_info_df = get_sensorinfo_siteid_name_combo_vu(siteid_varname)
         
-    # Add Variable_name column to sensor_info by using the Variable column from check_table
-    for i, row in enumerate(sensor_info):
-        varname = check_table.loc[check_table['Variable'] == row['sensor_name'], 'Variable_name'].values
-        if len(varname) > 0:
-            sensor_info[i]['variable_name'] = varname[0]
-        else:
-            sensor_info[i]['variable_name'] = None
-        
-    # Add source to sensor_info
-    for i, row in enumerate(sensor_info):
-        sensor_info[i]['source'] = 'vu_db'
+    # add a sitename column to sensor_info_df by using siteid_name2 as mapping
+    sensor_info_df['site_name'] = sensor_info_df['site_id'].map(dict(zip(siteid_name['site_id'], siteid_name['name'])))
     
-    return sensor_info
+    # add a variable_name column to sensor_info_df by using check_table as mapping
+    sensor_info_df['variable_name'] = sensor_info_df['sensor_name'].map(dict(zip(check_table['Variable'], check_table['Variable_name'])))
+    
+    # add a source column to sensor_info_df
+    sensor_info_df['source'] = 'vu_db'
+        
+    return sensor_info_df
 
 def get_data_vudb(sensorid, start_dt, end_dt):
     sensorid_db_string = get_dbstring(sensorid)      
@@ -248,11 +264,8 @@ def get_data_vudb(sensorid, start_dt, end_dt):
 
 def get_data_vu(check_table, start_dt, end_dt):
     # Get the sensor_info by site and varname combination
-    sensor_info = get_sensorinfo_by_site_and_varname_vu(check_table)
+    sensorinfo_df = get_sensorinfo_by_site_and_varname_vu(check_table)
         
-    # make dataframe of sensor_info
-    sensorinfo_df = pd.DataFrame(sensor_info)
-
     # Check if all items od check_table are in sensorinfo_df
     missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensorinfo_df.set_index(['site_name', 'sensor_name']).index)]
     if not missing_items.empty:
@@ -268,8 +281,9 @@ def get_data_vu(check_table, start_dt, end_dt):
     # Pivot the DataFrame
     data_df = data.pivot(index='dt', columns='logicid', values='value')
 
-    # Add columns that are not in the data_df but are in the sensor_info
-    for row in sensor_info:
+    # Add columns that are not in the data_df but are in the sensor_info_df
+    for i, row in sensorinfo_df.iterrows():
+        # Get the logicid from sensorinfo_df
         logicid = row['sensor_id']
         if logicid not in data_df.columns:
             # Create a new column with NaN values
@@ -362,51 +376,6 @@ def get_data_wur(check_table, start_dt, end_dt):
 
 
 ############### WUR DB
-from config import load_config
-from get_dbstring import get_dbstring
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import pandas as pd
-
-def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
-    """
-    Run a query on the PostgreSQL database and return the results.
-    
-    Parameters:
-    - query: SQL query string to execute.
-    - params: Optional parameters for the query.
-    
-    Returns:
-    - List of rows returned by the query.
-    """
-    config = load_config(filename=config_file, section=config_section)
-    
-    try:
-        with psycopg2.connect(**config) as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, params)
-                rows = cur.fetchall()
-                return rows
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-        return []
-    
-def get_sensorinfo_wur(shortname):
-    db_string = get_dbstring(shortname)    
-
-    query = f"""
-    SELECT id AS sensor_id, name AS sensor_name, unit AS unit, stationname AS site_name
-    FROM sensors
-    WHERE stationname IN ({db_string})
-    """
-              
-    result = run_pg_query(query, config_section='postgresql_wur')
-    
-    df = pd.DataFrame(result, columns=['sensor_id', 'sensor_name', 'unit', 'site_name'])
-
-    return df
-
-
 def get_data_wurdb(sensorid, start_dt, end_dt):
     sensorid_db_string = get_dbstring(sensorid)      
 
@@ -492,11 +461,6 @@ def get_sensorinfo_by_site_and_varname_wur(check_table):
 
 
 ########## VU DB
-
-
-import pandas as pd
-import os
-
 def select_variables(varfile, site):
     vardata = read_csv_with_header(varfile)
     vardata.columns = vardata.columns.str.strip()
