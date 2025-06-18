@@ -4,9 +4,9 @@ import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-from vudb import get_site_id_by_name, get_sensorinfo_by_siteid_and_sensorname, get_data
-from vudb import read_csv_with_header, select_variables
-from vudb import fix_start_end_dt
+from functions_db import get_site_id_by_name, get_sensorinfo_by_siteid_and_sensorname, get_data
+from functions_db import read_csv_with_header, select_variables
+from functions_general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
 from config import load_config
 
 def load_biomet_vudb(site, names, start_dt, end_dt, tz):
@@ -103,7 +103,7 @@ def load_biomet_vudb(site, names, start_dt, end_dt, tz):
             df_header.iloc[1, i+1] = row['aggmethod']
 
     except Exception as e:
-        print(f"Error connecting to the database: {e}")
+        print(f"Error: {e}")
         return None, None
 
     finally:
@@ -123,7 +123,10 @@ def download_and_append_vu_data(path, varfile, start_dt, end_dt, site, tz):
     file = f"{path}/{site}.csv"
     
     # Fix the start and end datetime strings
-    start_dt, end_dt = fix_start_end_dt(start_dt, end_dt, file, tz)
+    start_dt, end_dt = fix_start_end_dt(start_dt, end_dt, tz)
+
+    # Adapt start_dt to last line in existing dataset/file
+    start_dt = adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz)
     
     if start_dt is None or end_dt is None:
         return None
@@ -179,6 +182,7 @@ def download_and_append_vu_data(path, varfile, start_dt, end_dt, site, tz):
 
 if __name__ == "__main__":
 
+    sites=['ALB_MS']
     sites=['ALB_MS', 'ALB_RF','ZEG_RF','MOB_X1','MOB_X2','LAW_MS','DEM_NT','ASD_MP','ANK_PT','ZEG_MP','ZEG_PT','ILP_PT','WRW_SR','WRW_OW','ZEG_MOB']
     
     # Loop through the sites and download the data for each site

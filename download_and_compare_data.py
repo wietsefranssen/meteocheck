@@ -1,6 +1,5 @@
 from functions_general import fix_start_end_dt, get_stations_table, get_check_table_db
-from functions_db import get_siteids_vu, get_data_vu, get_sensorinfo_vu, get_sensorinfo_siteid_name_combo_vu, get_sensorinfo_by_site_and_varname_vu
-from functions_db import get_data_wur
+from functions_db import get_data_wur, get_data_vu
 from functions_plot import make_figure   
 
 import pandas as pd

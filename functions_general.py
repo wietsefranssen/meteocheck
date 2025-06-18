@@ -1,7 +1,6 @@
-import psycopg2
+import os
 from config import load_config
 from get_dbstring import get_dbstring
-from psycopg2.extras import RealDictCursor
 import pandas as pd
 
 def fix_start_end_dt(start_dt=None, end_dt=None, tz='UTC'):
@@ -22,6 +21,49 @@ def fix_start_end_dt(start_dt=None, end_dt=None, tz='UTC'):
         end_dt = pd.to_datetime(end_dt).tz_localize(tz)
         
     return start_dt, end_dt
+
+def adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz):
+
+    if os.path.exists(file):
+        # Read the file with special handling for the first three lines
+        with open(file, 'r') as f:
+            column_names = f.readline().strip().split(',')
+            units = f.readline().strip().split(',')
+            aggregation = f.readline().strip().split(',')
+        
+        # Read only the last line of the file to get the last date
+        with open(file, 'rb') as f:
+            f.seek(-2, os.SEEK_END)  # Move to the second-to-last byte
+            while f.read(1) != b'\n':  # Find the last newline character
+                f.seek(-2, os.SEEK_CUR)
+            last_line = f.readline().decode()
+        
+        # Convert the last line into a dictionary using column names
+        last_line_data = dict(zip(column_names, last_line.strip().split(',')))
+        
+        # Extract the last date from the datetime column
+        last_date = pd.to_datetime(last_line_data.get("datetime")).tz_convert(tz)
+        
+        # Determine the start date
+        start_dt = last_date + pd.Timedelta(minutes=1)
+
+        print(f"Previous data exists with last date: {last_date}.")
+    
+        # Check if the start date is before the end date
+        if pd.to_datetime(last_date) == pd.to_datetime(end_dt):
+            print(f"This is the same as the defined end_dt {end_dt}. Skipping...")
+            return None, None
+        elif pd.to_datetime(last_date) > pd.to_datetime(end_dt):
+            print(f"This is later than the defined end_dt {end_dt}. Skipping...")
+            return None, None
+
+    if pd.to_datetime(start_dt) >= pd.to_datetime(end_dt):
+        print(f"Start date {start_dt} is after end date {end_dt}. Skipping...")
+        return None, None
+    
+    # print(f"Start date set to: {start_dt}. End date set to: {end_dt}.")
+    
+    return start_dt
 
 def get_stations_table(filename='stations.csv'):
     """ 
