@@ -1,5 +1,6 @@
-from functions_general import fix_start_end_dt, get_stations_table, get_check_table_db
-from functions_db import get_data_wur, get_data_vu
+from functions_general import fix_start_end_dt
+
+from functions_db import get_data_from_db
 from functions_plot import make_figure   
 
 import pandas as pd
@@ -11,29 +12,7 @@ from dash import dcc, html, Input, Output, State, ctx
 start_dt, end_dt = fix_start_end_dt(start_dt=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d'), 
                                     end_dt=pd.to_datetime('today').strftime('%Y-%m-%d'))
 
-# Get the variables_table
-stations_table = get_stations_table("stations.csv")
-
-####### WUR DB DATA RETRIEVAL #######
-# Get the check_table
-check_table_wurdb = get_check_table_db(stations_table, source = 'wur_db')
-
-# Get data from the database
-sensorinfo_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
-
-####### VU DB DATA RETRIEVAL #######
-# Get the check_table
-check_table_vudb = get_check_table_db(stations_table, source = 'vu_db')
-
-# Get data from the database
-sensorinfo_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
-
-####### Combine VU and WUR data #######
-# Combine the two DataFrames
-data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
-
-# Combine the two sensor_info DataFrames
-sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
+sensorinfo_df, data_df = get_data_from_db(stationsfile="stations.csv", start_dt=start_dt, end_dt=end_dt, check_table_filename='check_table_base.csv')
 
 ####### Group the data into parts to separate plots #######
 # make groups of sensor_ids by variable_name

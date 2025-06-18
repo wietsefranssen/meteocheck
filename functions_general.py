@@ -136,4 +136,7 @@ def get_check_table_db(stations_table, source = 'wur_db', check_table_filename='
     # reset the index of check_table_vudb
     check_table_db = check_table_db.reset_index(drop=True)
 
+    if check_table_db.empty:
+        return None
+    
     return check_table_db

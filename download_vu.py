@@ -4,10 +4,12 @@ import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-from functions_db import get_site_id_by_name, get_sensorinfo_by_siteid_and_sensorname, get_data
+from functions_db import get_site_id_by_name, get_sensorinfo_by_siteid_and_sensorname
 from functions_db import read_csv_with_header, select_variables
 from functions_general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
 from config import load_config
+from functions_db import get_data_vudb
+from functions_db import get_data_from_db
 
 def load_biomet_vudb(site, names, start_dt, end_dt, tz):
     """
@@ -59,7 +61,7 @@ def load_biomet_vudb(site, names, start_dt, end_dt, tz):
         sensor_ids = [row['sensor_id'] for row in sensor_info]
         
         # Get the data
-        df = get_data(cursor, sensor_ids, start_dt, end_dt)           
+        df = get_data_vudb(sensor_ids, start_dt, end_dt)
         if df is None:
             return None, None
         
@@ -180,31 +182,211 @@ def download_and_append_vu_data(path, varfile, start_dt, end_dt, site, tz):
             # Write the data
             sensor_data.to_csv(f, index=False, header=False, na_rep='NA')
 
+def download_and_append_vu_data2(path, varfile, start_dt, end_dt, site, tz):
+    """
+    Download and append VU data, handling column names, units, and aggregation.
+    """
+    file = f"{path}/{site}.csv"
+    
+    # Fix the start and end datetime strings
+    start_dt, end_dt = fix_start_end_dt(start_dt, end_dt, tz)
+
+    # Adapt start_dt to last line in existing dataset/file
+    start_dt = adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz)
+    
+    # Get the variables_table
+    stations_table = get_stations_table("stations.csv")
+
+    ####### WUR DB DATA RETRIEVAL #######
+    # Get the check_table
+    check_table_wurdb = get_check_table_db(stations_table, source = 'wur_db')
+
+    # Get data from the database
+    sensorinfo_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
+
+    ####### VU DB DATA RETRIEVAL #######
+    # Get the check_table
+    check_table_vudb = get_check_table_db(stations_table, source = 'vu_db')
+
+    # Get data from the database
+    sensorinfo_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
+
+    ####### Combine VU and WUR data #######
+    # Combine the two DataFrames
+    data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+    
+
+    # Readin variables
+    selected_variables = select_variables(varfile, site)
+
+    # Download the data (placeholder for actual implementation)
+    selected_variables_db = selected_variables['varname_db'].tolist()
+    
+    # Make output directory if it does not exist
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    # Load the data from the database
+    print(f"Loading data from {site} from {start_dt} to {end_dt}...")
+    sensor_data, header_data = load_biomet_vudb(site = site,
+                                  names = selected_variables_db,
+                                  # Comment out sensor type to get all data; HEFL 1 en HEFL 2?
+                                  start_dt= start_dt,
+                                  end_dt = end_dt, 
+                                  tz = tz)
+    if sensor_data is None or header_data is None:
+        return None
+
+    # Convert selected_variables to a dictionary for renaming columns
+    selected_variables_dict = selected_variables.set_index('varname_db')['variable_name'].to_dict()
+    
+    # Rename the columns in sensor_data using the mapping
+    sensor_data.rename(columns=selected_variables_dict, inplace=True)
+    
+    # Rename the columns in header_data using the mapping
+    header_data.rename(columns=selected_variables_dict, inplace=True)
+
+    # print(sensor_data)                  
+    # if file exists
+    if os.path.exists(file):
+        
+        # Append the new data to the file add enter at the if needed
+        sensor_data.to_csv(file, mode='a', header=False, index=False, na_rep='NA')
+
+    else:
+        # Write the new data to a new file the header is written first
+        # the header contains 3 lines with the column names, units and aggregation
+        # the first column is the datetime column
+        with open(file, 'w') as f:
+
+            # Write the header
+            header_data.to_csv(f, index=False, header=True, na_rep='NA')
+            
+            # Write the data
+            sensor_data.to_csv(f, index=False, header=False, na_rep='NA')
+
 if __name__ == "__main__":
 
-    sites=['ALB_MS']
-    sites=['ALB_MS', 'ALB_RF','ZEG_RF','MOB_X1','MOB_X2','LAW_MS','DEM_NT','ASD_MP','ANK_PT','ZEG_MP','ZEG_PT','ILP_PT','WRW_SR','WRW_OW','ZEG_MOB']
+    start_dt_init=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+    start_dt_init="2019-01-01"
+    end_dt_init=pd.to_datetime('today').strftime('%Y-%m-%d')
+    tz="Etc/GMT-1"
+    check_table_filename='check_table_base.csv'
+    stationsfile ="stations.csv"
+    path="./data2"
+
+    from functions_db import get_check_table_db, get_stations_table, get_data_wur, get_data_vu
     
-    # Loop through the sites and download the data for each site
-    # Meteo
-    for site in sites:
-        print(f"\nDownloading data for {site}...")
-        download_and_append_vu_data(
-            path="./data/",
-            varfile="./vars_meteo.csv",
-            start_dt="2019-01-01",
-            end_dt=datetime.now().strftime("%Y-%m-%d"),
-            site=site,
-            tz="Etc/GMT-1"
-        )
+    # Get the variables_table
+    stations_table = get_stations_table(stationsfile)
+    check_table_vudb = get_check_table_db(stations_table, source='vu_db', check_table_filename=check_table_filename)
+
+    # Loop through the stations and get the data
+    for station in check_table_vudb['Station'].unique():
+        print(f"\nDownloading data for {station}...")
+        
+        file = f"{path}/{station}.csv"
+
+        # Fix the start and end datetime strings
+        start_dt, end_dt = fix_start_end_dt(start_dt_init, end_dt_init, tz)
+
+        # Adapt start_dt to last line in existing dataset/file
+        start_dt = adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz)
+        print(f"Start date set to: {start_dt}. End date set to: {end_dt}.")
+        
+        sensorinfo_df, data_df = get_data_from_db(stationsfile=stationsfile, start_dt=start_dt, end_dt=end_dt, check_table_filename=check_table_filename)
+        
+        if sensorinfo_df is None or data_df is None:
+            print(f"No data found for {station} in the specified date range.")
+            continue
+        # Readin variables
+        
+    # # Convert selected_variables to a dictionary for renaming columns
+    # selected_variables_dict = selected_variables.set_index('varname_db')['variable_name'].to_dict()
     
-    ndays = 1
-    end_dt = datetime.now().strftime("%Y-%m-%d"),    
-    start_dt = (datetime.now() - pd.DateOffset(days=ndays)).strftime("%Y-%m-%d")
-    site = 'ALB_RF'
-    sensor_data, header_data = load_biomet_vudb(site = site,
-                            names = "MT1_SWIN_1_H_180",
-                            # Comment out sensor type to get all data; HEFL 1 en HEFL 2?
-                            start_dt= start_dt,
-                            end_dt = end_dt,
-                            tz = "Etc/GMT-1")
+    # # Rename the columns in sensor_data using the mapping
+    # sensor_data.rename(columns=selected_variables_dict, inplace=True)
+    
+    # # Rename the columns in header_data using the mapping
+    # header_data.rename(columns=selected_variables_dict, inplace=True)
+
+    # # print(sensor_data)                  
+    # # if file exists
+    # if os.path.exists(file):
+        
+    #     # Append the new data to the file add enter at the if needed
+    #     sensor_data.to_csv(file, mode='a', header=False, index=False, na_rep='NA')
+
+    # else:
+    #     # Write the new data to a new file the header is written first
+    #     # the header contains 3 lines with the column names, units and aggregation
+    #     # the first column is the datetime column
+    #     with open(file, 'w') as f:
+
+    #         # Write the header
+    #         header_data.to_csv(f, index=False, header=True, na_rep='NA')
+            
+    #         # Write the data
+    #         sensor_data.to_csv(f, index=False, header=False, na_rep='NA')
+
+        
+    #     # download_and_append_vu_data(
+    #     #     path="./data/",
+    #     #     varfile="./vars_meteo.csv",
+    #     #     start_dt=start_dt,
+    #     #     end_dt=end_dt,
+    #     #     site=station,
+    #     #     tz=tz
+    #     # )
+    
+
+    # # # Adapt start_dt to last line in existing dataset/file
+    # # start_dt = adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz)
+
+    # # Make groups of sensor_ids by site_name
+    # sensor_groups = sensorinfo_df.groupby('site_name')['sensor_id'].apply(list).to_dict()
+
+    # # List of site name
+    # group_names = list(sensor_groups.keys())
+
+
+
+    # sites=['ALB_MS']
+    # sites=['ALB_RF','ZEG_RF','MOB_X1','MOB_X2','LAW_MS','DEM_NT','ASD_MP','ANK_PT','ZEG_MP','ZEG_PT','ILP_PT','WRW_SR','WRW_OW','ZEG_MOB']
+    # sites=['ALB_RF']
+    
+    # # Loop through the sites and download the data for each site
+    # # Meteo
+    
+    # for site in sites:
+    #     print(f"\nDownloading data for {site}...")
+    #     download_and_append_vu_data2(
+    #         path="./data/",
+    #         varfile="./vars_meteo.csv",
+    #         start_dt="2019-01-01",
+    #         end_dt=pd.to_datetime('today').strftime('%Y-%m-%d'),
+    #         site=site,
+    #         tz="Etc/GMT-1"
+    #     )
+        
+    # for site in sites:
+    #     print(f"\nDownloading data for {site}...")
+    #     download_and_append_vu_data(
+    #         path="./data2/",
+    #         varfile="./vars_meteo.csv",
+    #         start_dt="2019-01-01",
+    #         end_dt=datetime.now().strftime("%Y-%m-%d"),
+    #         site=site,
+    #         tz="Etc/GMT-1"
+    #     )
+    
+    # ndays = 1
+    # end_dt = datetime.now().strftime("%Y-%m-%d"),    
+    # start_dt = (datetime.now() - pd.DateOffset(days=ndays)).strftime("%Y-%m-%d")
+    # site = 'ALB_RF'
+    # sensor_data, header_data = load_biomet_vudb(site = site,
+    #                         names = "MT1_SWIN_1_H_180",
+    #                         # Comment out sensor type to get all data; HEFL 1 en HEFL 2?
+    #                         start_dt= start_dt,
+    #                         end_dt = end_dt,
+    #                         tz = "Etc/GMT-1")

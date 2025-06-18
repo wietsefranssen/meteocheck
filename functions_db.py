@@ -5,6 +5,39 @@ from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
 import os
+from datetime import datetime
+from functions_general import get_stations_table, get_check_table_db
+
+def get_data_from_db(stationsfile="stations.csv", start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
+    """
+    Function to retrieve data from the WUR and VU databases.
+    """
+    # Get the variables_table
+    stations_table = get_stations_table(stationsfile)
+
+    ####### WUR DB DATA RETRIEVAL #######
+    # Get the check_table
+    check_table_wurdb = get_check_table_db(stations_table, source='wur_db', check_table_filename=check_table_filename)
+
+    # Get data from the database
+    sensorinfo_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
+
+    ####### VU DB DATA RETRIEVAL #######
+    # Get the check_table
+    check_table_vudb = get_check_table_db(stations_table, source='vu_db', check_table_filename=check_table_filename)
+
+    # Get data from the database
+    sensorinfo_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
+
+    ####### Combine VU and WUR data #######
+    # Combine the two DataFrames
+    data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+
+    # Combine the two sensor_info DataFrames
+    sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
+    
+    return sensorinfo_df, data_df
+
 
 def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
     """
@@ -63,146 +96,73 @@ def get_siteids_vu(shortname):
 
     return result
 
-def get_sensorids_vu(siteid, varname=None):
-    siteid_db_string = get_dbstring(siteid)    
-    varname_db_string = get_dbstring(varname)    
+def get_sensor_units2(shortname):
+    # if isinstance(unit_ids, list) and len(unit_ids) > 1:
+    #     # unit_ids = ",".join(map(str, unit_ids))  # Join list elements with '|'
+    #     db_string = "{" + ",".join(map(str, unit_ids)) + "}"
 
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
-    checkk = 0
-    try:
-        with psycopg2.connect(**config) as conn:
-            with conn.cursor() as cur:
-            # with conn.cursor(cursor_factory=RealDictCursor) as cur:
-              query = f"""
-              SELECT id AS sensor_id, unit AS unit_id, name AS sensor_name
-              FROM cdr.logvalproviders
-              WHERE site IN ({siteid_db_string})
-                AND name IN ({varname_db_string})
-              """
-              cur.execute(query, (checkk,))
-              rows = cur.fetchall()
-              # Get columnnr 0 from rows
-              sensor_ids = [row[0] for row in rows]
-              print("The number of parts: ", cur.rowcount)
-              for row in rows:
-                  print(row)
-              return sensor_ids
-                
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
+    db_string = get_dbstring(shortname)    
 
-def get_sensorinfo_vu(siteid, names):
-    names_db_string = get_dbstring(names)      
-    siteid_db_string = get_dbstring(siteid)      
+    # Query to get the sensor units
+    query = f"""
+    SELECT id AS unit_id, abbreviation AS unit
+    FROM cdr.units
+    WHERE id IN ({db_string})
+    """
+    # WHERE id = ANY(%s)
 
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
-    try:
-        with psycopg2.connect(**config) as conn:
-            # with conn.cursor() as cur:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                query = f"""
-                SELECT id AS sensor_id, unit AS unit_id, name AS sensor_name, aggmethod AS aggmethod, site AS site_id
-                FROM cdr.logvalproviders
-                WHERE site IN ({siteid_db_string})
-                    AND name IN ({names_db_string})
-                """
-                
-                cur.execute(query, ())
-                sensor_info_result = cur.fetchall()
-                if not sensor_info_result:
-                    # print(f"No sensor_id found for site_id: {site_id}")
-                    # print(f"No sensor_id found for site_id: {site_id}, names: {names}")
-                    return None
-                # sensor_ids = [row['sensor_id'] for row in sensor_info_result]
-                unit_ids = [row['unit_id'] for row in sensor_info_result]
+    result = run_pg_query(query, config_section='postgresql_vu')
 
-                # data_result = cur.fetchall()
-              
-                  # Get sensor units
-                sensor_units = get_sensor_units(cur, unit_ids)  
+    return result
 
-                # Add sensor units to sensor_info_result
-                for i, row in enumerate(sensor_info_result):
-                    unit_id = row['unit_id']
-                    # Find the corresponding unit from sensor_units
-                    unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
-                    if unit_row:
-                        sensor_info_result[i]['sensor_units'] = unit_row['unit']
-                    else:
-                        sensor_info_result[i]['sensor_units'] = None  # or some default value
-
-                # Get sensor units
-                sensor_units = get_sensor_units(cur, unit_ids)  
-
-                # Add sensor units to sensor_info_result
-                for i, row in enumerate(sensor_info_result):
-                    unit_id = row['unit_id']
-                    # Find the corresponding unit from sensor_units
-                    unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
-                    if unit_row:
-                        sensor_info_result[i]['sensor_units'] = unit_row['unit']
-                    else:
-                        sensor_info_result[i]['sensor_units'] = None  # or some default value
-
-                return sensor_info_result
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
 
 def get_sensorinfo_siteid_name_combo_vu(siteid_names_combo):
- 
-    
+  
     # Convert siteid_names_combo to a string by removing the [ and ] characters
     siteid_names_combo = str(siteid_names_combo).replace('[', '').replace(']', '')
     
+    query = f"""
+    SELECT id AS sensor_id, unit AS unit_id, name AS sensor_name, site AS site_id
+    FROM cdr.logvalproviders
+    WHERE (site, name) IN ({siteid_names_combo})
+    """
+                
+    sensor_info = run_pg_query(query, config_section='postgresql_vu')
     
-    # Make a string for the siteid_names_combo     
-    # siteid_names_combo_string = get_dbstring(siteid_names_combo)
+    # get vector of unit_ids from result
+    unit_ids = sensor_info['unit_id'].to_list()
+    # sensor_ids = [row['sensor_id'] for row in sensor_info_result]
+    # unit_ids = [row['unit_id'] for row in sensor_info_result]
 
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
-    try:
-        with psycopg2.connect(**config) as conn:
-            # with conn.cursor() as cur:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                query = f"""
-                SELECT id AS sensor_id, unit AS unit_id, name AS sensor_name, aggmethod AS aggmethod, site AS site_id
-                FROM cdr.logvalproviders
-                WHERE (site, name) IN ({siteid_names_combo})
-                """
-                
-                cur.execute(query, ())
-                sensor_info_result = cur.fetchall()
-                if not sensor_info_result:
-                    # print(f"No sensor_id found for site_id: {site_id}")
-                    # print(f"No sensor_id found for site_id: {site_id}, names: {names}")
-                    return None
-                # sensor_ids = [row['sensor_id'] for row in sensor_info_result]
-                unit_ids = [row['unit_id'] for row in sensor_info_result]
+    # Get sensor units
+    sensor_units = get_sensor_units2(unit_ids)  
 
-                # Get sensor units
-                sensor_units = get_sensor_units(cur, unit_ids)  
+    # Add 'unit' from sensor_units to sensor_info by mapping unit_id from sensor_info to unit_id from sensor_units
+    unit_mapping = dict(zip(sensor_units['unit_id'], sensor_units['unit']))
+    sensor_info['unit'] = sensor_info['unit_id'].map(unit_mapping)
 
-                # Add sensor units to sensor_info_result
-                for i, row in enumerate(sensor_info_result):
-                    unit_id = row['unit_id']
-                    # Find the corresponding unit from sensor_units
-                    unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
-                    if unit_row:
-                        sensor_info_result[i]['unit'] = unit_row['unit']
-                    else:
-                        sensor_info_result[i]['unit'] = None  # or some default value
+    return sensor_info
 
-                # Convert to DataFrame
-                sensor_info_result = pd.DataFrame(sensor_info_result)
-                
-                return sensor_info_result
+def get_data_vudb(sensorid, start_dt, end_dt):
+    sensorid_db_string = get_dbstring(sensorid)      
 
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
+    # Check if start_dt and end_dt are datetime objects, if convert to strings take timezone into account
+    if isinstance(start_dt, datetime):
+        start_dt = start_dt.strftime('%Y-%m-%d %H:%M:%S%z')
+    if isinstance(end_dt, datetime):
+        end_dt = end_dt.strftime('%Y-%m-%d %H:%M:%S%z')
+ 
+    query = f"""
+    SELECT dt, logicid, value
+    FROM cdr.pointdata
+    WHERE logicid IN ({sensorid_db_string})
+    AND dt BETWEEN %s AND %s
+    """
 
+    result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_vu')
+ 
+    return result
+         
 def get_sensorinfo_by_site_and_varname_vu(check_table):
     
     # get sites by selecting all unique values in the 'Station' column of the check_table
@@ -236,33 +196,12 @@ def get_sensorinfo_by_site_and_varname_vu(check_table):
         
     return sensor_info_df
 
-def get_data_vudb(sensorid, start_dt, end_dt):
-    sensorid_db_string = get_dbstring(sensorid)      
-
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
-    try:
-        with psycopg2.connect(**config) as conn:
-            # with conn.cursor() as cur:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-              query = f"""
-              SELECT dt, logicid, value
-              FROM cdr.pointdata
-              WHERE logicid IN ({sensorid_db_string})
-                AND dt BETWEEN %s AND %s
-              """
-              cur.execute(query, (start_dt, end_dt))
-              data_result = cur.fetchall()
-              if not data_result:
-                print(f"No data found for period {start_dt} - {end_dt}")
-                return None
-              # Convert the result to a DataFrame
-              df = pd.DataFrame(data_result)
-              return df  
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-
 def get_data_vu(check_table, start_dt, end_dt):
+
+    # Check if check_table is None or empty
+    if check_table is None or check_table.empty:
+        return None, None
+
     # Get the sensor_info by site and varname combination
     sensorinfo_df = get_sensorinfo_by_site_and_varname_vu(check_table)
         
@@ -278,16 +217,20 @@ def get_data_vu(check_table, start_dt, end_dt):
     # Get the sensor data from the database
     data = get_data_vudb(sensorids, start_dt, end_dt)
 
+    # Check if data is None or empty
+    if data is None or data.empty:
+        print(f"No data found for period {start_dt} - {end_dt}")
+        return sensorinfo_df, pd.DataFrame()
     # Pivot the DataFrame
     data_df = data.pivot(index='dt', columns='logicid', values='value')
 
     # Add columns that are not in the data_df but are in the sensor_info_df
     for i, row in sensorinfo_df.iterrows():
         # Get the logicid from sensorinfo_df
-        logicid = row['sensor_id']
-        if logicid not in data_df.columns:
+        sensor_id = row['sensor_id']
+        if sensor_id not in data_df.columns:
             # Create a new column with NaN values
-            data_df[logicid] = np.nan
+            data_df[sensor_id] = np.nan
 
     # Put the columns in the same order as in sensor_info
     data_df = data_df[sensorids]
@@ -301,20 +244,18 @@ def get_data_vu(check_table, start_dt, end_dt):
     # Rename the first column to 'datetime'
     data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
 
-    # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
-    # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
-
-    # # Rename the columns in data_df using the mapping
-    # data_df.rename(columns=sensor_id_to_name, inplace=True)
-
-    # Make index of datetime culumn
-    # data_df['datetime'] = pd.to_datetime(data_df['datetime'])
+    # Set the 'datetime' column as the index
     data_df.set_index('datetime', inplace=True)
+
     # print(sensorinfo_df)
     # print(data_df)
     return sensorinfo_df, data_df
 
 def get_data_wur(check_table, start_dt, end_dt):
+    
+    # Check if check_table is None or empty
+    if check_table is None or check_table.empty:
+        return None, None
     
     # Get the sensor_info by site and varname combination
     sensorinfo_df = get_sensorinfo_by_site_and_varname_wur(check_table)
@@ -359,21 +300,12 @@ def get_data_wur(check_table, start_dt, end_dt):
     # Rename the first column to 'datetime'
     data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
 
-    # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
-    # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
-
-    # # Rename the columns in data_df using the mapping
-    # data_df.rename(columns=sensor_id_to_name, inplace=True)
-
-    # Make index of datetime culumn
-    # data_df['datetime'] = pd.to_datetime(data_df['datetime'])
+    # Set the 'datetime' column as the index
     data_df.set_index('datetime', inplace=True)
     # print(sensorinfo_df)
     # print(data_df)
+
     return sensorinfo_df, data_df
-
-
-
 
 ############### WUR DB
 def get_data_wurdb(sensorid, start_dt, end_dt):
@@ -524,27 +456,31 @@ def get_sensorinfo_by_siteid_and_sensorname(cursor, site_id, names):
     
     cursor.execute(query, (site_id,))
     
-    sensor_info_result = cursor.fetchall()
-    if not sensor_info_result:
+    sensor_info = cursor.fetchall()
+    if not sensor_info:
         # print(f"No sensor_id found for site_id: {site_id}")
         # print(f"No sensor_id found for site_id: {site_id}, names: {names}")
         return None
     # sensor_ids = [row['sensor_id'] for row in sensor_info_result]
-    unit_ids = [row['unit_id'] for row in sensor_info_result]
-    # print(f"Retrieved sensor_ids: {sensor_ids}, unit_ids: {unit_ids}")
+    unit_ids = sensor_info['unit_id'].to_list()
+     # print(f"Retrieved sensor_ids: {sensor_ids}, unit_ids: {unit_ids}")
     
     # Get sensor units
     sensor_units = get_sensor_units(cursor, unit_ids)  
 
-    # Add sensor units to sensor_info_result
-    for i, row in enumerate(sensor_info_result):
-        unit_id = row['unit_id']
-        # Find the corresponding unit from sensor_units
-        unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
-        if unit_row:
-            sensor_info_result[i]['sensor_units'] = unit_row['unit']
-        else:
-            sensor_info_result[i]['sensor_units'] = None  # or some default value
+    # Add 'unit' from sensor_units to sensor_info by mapping unit_id from sensor_info to unit_id from sensor_units
+    unit_mapping = dict(zip(sensor_units['unit_id'], sensor_units['unit']))
+    sensor_info['unit'] = sensor_info['unit_id'].map(unit_mapping)
+
+    # # Add sensor units to sensor_info_result
+    # for i, row in enumerate(sensor_info_result):
+    #     unit_id = row['unit_id']
+    #     # Find the corresponding unit from sensor_units
+    #     unit_row = next((u for u in sensor_units if u['unit_id'] == unit_id), None)
+    #     if unit_row:
+    #         sensor_info_result[i]['sensor_units'] = unit_row['unit']
+    #     else:
+    #         sensor_info_result[i]['sensor_units'] = None  # or some default value
 
     return sensor_info_result
 
@@ -567,27 +503,3 @@ def get_sensor_units(cursor, unit_ids):
         return None
 
     return unit_result
-
-
-# Get the data
-def get_data(cursor, sensor_ids, start_dt, end_dt):
-    if isinstance(sensor_ids, list) and len(sensor_ids) > 1:
-        # sensor_ids = ",".join(map(str, sensor_ids))  # Join list elements with '|'
-        sensor_ids_str = "{" + ",".join(map(str, sensor_ids)) + "}"
-
-    # Query to get the data
-    data_query = """
-    SELECT dt, logicid, value
-    FROM cdr.pointdata
-    WHERE logicid = ANY(%s)
-        AND dt BETWEEN %s AND %s
-    """
-    
-    cursor.execute(data_query, (sensor_ids_str, start_dt, end_dt))
-    data_result = cursor.fetchall()
-    if not data_result:
-        print(f"No data found for period {start_dt} - {end_dt}")
-        return None
-    # Convert the result to a DataFrame
-    df = pd.DataFrame(data_result)
-    return df
