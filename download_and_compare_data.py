@@ -5,41 +5,8 @@ from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
 from vudb import get_sensor_units
-from db_functions import get_siteids_vu
+from functions_db import get_siteids_vu, get_data_vu
 
-def get_data(sensorid, start_dt, end_dt):
-    sensorid_db_string = get_dbstring(sensorid)      
-
-    """ Retrieve data from the vendors table """
-    config  = load_config(filename='database.ini', section='postgresql_vu')
-    try:
-        with psycopg2.connect(**config) as conn:
-            # with conn.cursor() as cur:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-              query = f"""
-              SELECT dt, logicid, value
-              FROM cdr.pointdata
-              WHERE logicid IN ({sensorid_db_string})
-                AND dt BETWEEN %s AND %s
-              """
-              cur.execute(query, (start_dt, end_dt))
-              data_result = cur.fetchall()
-              if not data_result:
-                print(f"No data found for period {start_dt} - {end_dt}")
-                return None
-              # Convert the result to a DataFrame
-              df = pd.DataFrame(data_result)
-              # # Get columnnr 0 from rows
-              # sensor_ids = [row[0] for row in rows]
-              # print("The number of parts: ", cur.rowcount)
-              
-              # for row in rows:
-              #     print(row)
-              # return sensor_ids
-              return df  
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-       
 def fix_start_end_dt(start_dt=None, end_dt=None, tz='UTC'):
     # if the time of start_dt is not provided, set it to 00:00:00
     if len(start_dt) == 10:
@@ -311,7 +278,7 @@ def get_vu_data(check_table, start_dt, end_dt):
     sensorids = sensor_info_df['sensor_id'].tolist()
     
     # Get the sensor data from the database
-    data = get_data(sensorids, start_dt, end_dt)
+    data = get_data_vu(sensorids, start_dt, end_dt)
 
     # Pivot the DataFrame
     pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
