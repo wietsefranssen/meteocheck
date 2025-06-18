@@ -67,36 +67,36 @@ def load_biomet_vudb(site, names, start_dt, end_dt, tz):
         df['dt'] = pd.to_datetime(df['dt'], utc=True).dt.tz_convert(tz)
 
         # Pivot the DataFrame
-        pivoted_df = df.pivot(index='dt', columns='logicid', values='value')
+        data_df = df.pivot(index='dt', columns='logicid', values='value')
 
-        # Add columns that are not in the pivoted_df but are in the sensor_info
+        # Add columns that are not in the data_df but are in the sensor_info
         for row in sensor_info:
             logicid = row['sensor_id']
-            if logicid not in pivoted_df.columns:
+            if logicid not in data_df.columns:
                 # Create a new column with NaN values
-                pivoted_df[logicid] = np.nan
+                data_df[logicid] = np.nan
 
         # Put the columns in the same order as in sensor_info
-        pivoted_df = pivoted_df[sensor_ids]
+        data_df = data_df[sensor_ids]
 
         # Reset the column names (optional, to remove the MultiIndex)
-        pivoted_df.columns.name = None
+        data_df.columns.name = None
         
-        # Make index of pivoted_df into a column
-        pivoted_df.reset_index(inplace=True)
+        # Make index of data_df into a column
+        data_df.reset_index(inplace=True)
         
         # Rename the first column to 'datetime'
-        pivoted_df.rename(columns={pivoted_df.columns[0]: 'datetime'}, inplace=True)
+        data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
         
         # Create a dictionary mapping sensor_id to sensor_name from sensor_info
         sensor_id_to_name = {row['sensor_id']: row['sensor_name'] for row in sensor_info}
 
-        # Rename the columns in pivoted_df using the mapping
-        pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
+        # Rename the columns in data_df using the mapping
+        data_df.rename(columns=sensor_id_to_name, inplace=True)
 
         # Make a df with the sensor names as columns and the first row the units and the second row the aggregation method
-        # Create a new DataFrame with the same columns as pivoted_df and two rows
-        df_header = pd.DataFrame(index=['units', 'aggmethod'], columns=pivoted_df.columns)
+        # Create a new DataFrame with the same columns as data_df and two rows
+        df_header = pd.DataFrame(index=['units', 'aggmethod'], columns=data_df.columns)
         # Fill the new DataFrame with the units and aggregation methods
         for i, row in enumerate(sensor_info):
             df_header.iloc[0, i+1] = row['sensor_units']
@@ -111,7 +111,7 @@ def load_biomet_vudb(site, names, start_dt, end_dt, tz):
             cursor.close()
             conn.close()
             
-    return pivoted_df, df_header
+    return data_df, df_header
   
   
   

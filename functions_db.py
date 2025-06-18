@@ -260,109 +260,109 @@ def get_data_vu(check_table, start_dt, end_dt):
     sensor_info = get_sensorinfo_by_site_and_varname_vu(check_table)
         
     # make dataframe of sensor_info
-    sensor_info_df = pd.DataFrame(sensor_info)
+    sensorinfo_df = pd.DataFrame(sensor_info)
 
-    # Check if all items od check_table are in sensor_info_df
-    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensor_info_df.set_index(['site_name', 'sensor_name']).index)]
+    # Check if all items od check_table are in sensorinfo_df
+    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensorinfo_df.set_index(['site_name', 'sensor_name']).index)]
     if not missing_items.empty:
         print("The following items in the check_table are not found in the sensor_info:")
         print(missing_items[['Station', 'Variable']])
 
-    # Get the sensor_ids from sensor_info_df
-    sensorids = sensor_info_df['sensor_id'].tolist()
+    # Get the sensor_ids from sensorinfo_df
+    sensorids = sensorinfo_df['sensor_id'].tolist()
     
     # Get the sensor data from the database
     data = get_data_vu2(sensorids, start_dt, end_dt)
 
     # Pivot the DataFrame
-    pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
+    data_df = data.pivot(index='dt', columns='logicid', values='value')
 
-    # Add columns that are not in the pivoted_df but are in the sensor_info
+    # Add columns that are not in the data_df but are in the sensor_info
     for row in sensor_info:
         logicid = row['sensor_id']
-        if logicid not in pivoted_df.columns:
+        if logicid not in data_df.columns:
             # Create a new column with NaN values
-            pivoted_df[logicid] = np.nan
+            data_df[logicid] = np.nan
 
     # Put the columns in the same order as in sensor_info
-    pivoted_df = pivoted_df[sensorids]
+    data_df = data_df[sensorids]
 
     # Reset the column names (optional, to remove the MultiIndex)
-    pivoted_df.columns.name = None
+    data_df.columns.name = None
     
-    # Make index of pivoted_df into a column
-    pivoted_df.reset_index(inplace=True)
+    # Make index of data_df into a column
+    data_df.reset_index(inplace=True)
     
     # Rename the first column to 'datetime'
-    pivoted_df.rename(columns={pivoted_df.columns[0]: 'datetime'}, inplace=True)
+    data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
 
     # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
     # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
 
-    # # Rename the columns in pivoted_df using the mapping
-    # pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
+    # # Rename the columns in data_df using the mapping
+    # data_df.rename(columns=sensor_id_to_name, inplace=True)
 
     # Make index of datetime culumn
-    # pivoted_df['datetime'] = pd.to_datetime(pivoted_df['datetime'])
-    pivoted_df.set_index('datetime', inplace=True)
-    # print(sensor_info_df)
-    # print(pivoted_df)
-    return sensor_info_df, pivoted_df
+    # data_df['datetime'] = pd.to_datetime(data_df['datetime'])
+    data_df.set_index('datetime', inplace=True)
+    # print(sensorinfo_df)
+    # print(data_df)
+    return sensorinfo_df, data_df
 
 def get_data_wur(check_table, start_dt, end_dt):
     
     # Get the sensor_info by site and varname combination
-    sensor_info_df = get_sensorinfo_by_site_and_varname_wur(check_table)
+    sensorinfo_df = get_sensorinfo_by_site_and_varname_wur(check_table)
         
-    # Check if all items od check_table are in sensor_info_df
-    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensor_info_df.set_index(['site_name', 'sensor_name']).index)]
+    # Check if all items od check_table are in sensorinfo_df
+    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensorinfo_df.set_index(['site_name', 'sensor_name']).index)]
     if not missing_items.empty:
         print("The following items in the check_table are not found in the sensor_info:")
         print(missing_items[['Station', 'Variable']])
 
-    # Get the sensor_ids from sensor_info_df
-    sensorids = sensor_info_df['sensor_id'].tolist()
+    # Get the sensor_ids from sensorinfo_df
+    sensorids = sensorinfo_df['sensor_id'].tolist()
     
     # Get the sensor data from the database
     data = get_data_wur2(sensorids, start_dt, end_dt)
 
     # Remove duplicates based on 'dt' and 'logicid' to ensure unique entries
     data_nodup = data.drop_duplicates(subset=['dt', 'logicid'])
-    pivoted_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
+    data_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
 
     # Pivot the DataFrame
-    pivoted_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
-    # pivoted_df = data.pivot(index='dt', columns='logicid', values='value')
+    data_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
+    # data_df = data.pivot(index='dt', columns='logicid', values='value')
 
-    # Add columns that are not in the pivoted_df but are in the sensor_info
-    for i, row in sensor_info_df.iterrows():
-        # Get the logicid from sensor_info_df
+    # Add columns that are not in the data_df but are in the sensor_info
+    for i, row in sensorinfo_df.iterrows():
+        # Get the logicid from sensorinfo_df
         logicid = row['sensor_id']
-        if logicid not in pivoted_df.columns:
+        if logicid not in data_df.columns:
             # Create a new column with NaN values
-            pivoted_df[logicid] = np.nan
+            data_df[logicid] = np.nan
 
     # Put the columns in the same order as in sensor_info
-    pivoted_df = pivoted_df[sensorids]
+    data_df = data_df[sensorids]
 
     # Reset the column names (optional, to remove the MultiIndex)
-    pivoted_df.columns.name = None
+    data_df.columns.name = None
     
-    # Make index of pivoted_df into a column
-    pivoted_df.reset_index(inplace=True)
+    # Make index of data_df into a column
+    data_df.reset_index(inplace=True)
     
     # Rename the first column to 'datetime'
-    pivoted_df.rename(columns={pivoted_df.columns[0]: 'datetime'}, inplace=True)
+    data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
 
     # # Create a dictionary mapping sensor_id to sensor_name from sensor_info
     # sensor_id_to_name = {row['sensor_id']: row['fullname'] for row in sensor_info}
 
-    # # Rename the columns in pivoted_df using the mapping
-    # pivoted_df.rename(columns=sensor_id_to_name, inplace=True)
+    # # Rename the columns in data_df using the mapping
+    # data_df.rename(columns=sensor_id_to_name, inplace=True)
 
     # Make index of datetime culumn
-    # pivoted_df['datetime'] = pd.to_datetime(pivoted_df['datetime'])
-    pivoted_df.set_index('datetime', inplace=True)
-    # print(sensor_info_df)
-    # print(pivoted_df)
-    return sensor_info_df, pivoted_df
+    # data_df['datetime'] = pd.to_datetime(data_df['datetime'])
+    data_df.set_index('datetime', inplace=True)
+    # print(sensorinfo_df)
+    # print(data_df)
+    return sensorinfo_df, data_df

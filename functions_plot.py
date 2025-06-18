@@ -2,26 +2,26 @@ import plotly.graph_objects as go
 import plotly.colors
 
 # for sensor in sensor_names:
-def make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor, x_range=None, y_range=None):
+def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_range=None):
     # Assign colors dynamically using Plotly's color sequence
-    sitenames = sorted(sensor_info_df['site_name'].unique())
+    sitenames = sorted(sensorinfo_df['site_name'].unique())
     color_seq = plotly.colors.qualitative.Plotly
     sensor_color_map = {sensor: color_seq[i % len(color_seq)] for i, sensor in enumerate(sitenames)}
 
     downsample_factor = 30  # Adjust this value to control the downsampling rate
-    # shared_x = pivoted_df.index[::downsample_factor]
+    # shared_x = data_df.index[::downsample_factor]
 
     # Create a mapping from sensor_id to various attributes
-    # sensor_id_to_fullname = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['fullname']))
-    sensor_id_to_unit = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['unit']))
-    sensor_id_to_sensor_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['sensor_name']))
-    sensor_id_to_site_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['site_name']))
-    sensor_id_to_variable_name = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['variable_name']))
-    sensor_id_to_source = dict(zip(sensor_info_df['sensor_id'], sensor_info_df['source']))
+    # sensor_id_to_fullname = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['fullname']))
+    sensor_id_to_unit = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['unit']))
+    sensor_id_to_sensor_name = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['sensor_name']))
+    sensor_id_to_site_name = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['site_name']))
+    sensor_id_to_variable_name = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['variable_name']))
+    sensor_id_to_source = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['source']))
 
-    shared_x = pivoted_df.index[::downsample_factor]
-    # shared_x = pivoted_df.index[::downsample_factor]
-    pivoted_df = pivoted_df[::downsample_factor]
+    shared_x = data_df.index[::downsample_factor]
+    # shared_x = data_df.index[::downsample_factor]
+    data_df = data_df[::downsample_factor]
 
     fig = go.Figure()
     # Get the sensor_ids for the current sensor group
@@ -32,10 +32,10 @@ def make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor, x_range=None,
         sensor_ids,
         key=lambda sensor_id: sensor_id_to_site_name.get(sensor_id, "")
     )
-# pivoted_df = pivoted_df[sorted_columns]
+# data_df = data_df[sorted_columns]
     for sensor_id in sensor_ids:
         # unit = units[line]
-        # pivoted_df[sensor_id].min()
+        # data_df[sensor_id].min()
         unit = sensor_id_to_unit.get(sensor_id, "")
 #         fullname = sensor_id_to_fullname.get(sensor_id, "")
         sitename = sensor_id_to_site_name.get(sensor_id, "")
@@ -45,8 +45,8 @@ def make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor, x_range=None,
         fig.add_trace(
             go.Scattergl(
                 x=shared_x,  # Plot every 10th point for performance
-                # x=pivoted_df.index,
-                y=pivoted_df[sensor_id],
+                # x=data_df.index,
+                y=data_df[sensor_id],
                 mode='markers+lines',
                 name=f"{sitename} ({source}: {sensor_name})",
                 line=dict(width=1,
@@ -77,7 +77,7 @@ def make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor, x_range=None,
 
 
     # # Set y_range to the min and max of all sensor_ids in the current sensor group
-    # y_range = [pivoted_df[sensor_ids].min().min(), pivoted_df[sensor_ids].max().max()]
+    # y_range = [data_df[sensor_ids].min().min(), data_df[sensor_ids].max().max()]
     # if y_range:
     #     # print(f"Setting y-axis range for {var_name}: {y_range}")
     #     print(f"Setting y-axis: {y_range}"  )

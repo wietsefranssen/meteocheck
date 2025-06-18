@@ -20,32 +20,32 @@ stations_table = get_stations_table("stations.csv")
 check_table_wurdb = get_check_table_db(stations_table, source = 'wur_db')
 
 # Get data from the database
-sensor_info_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
+sensorinfo_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
 
 ####### VU DB DATA RETRIEVAL #######
 # Get the check_table
 check_table_vudb = get_check_table_db(stations_table, source = 'vu_db')
 
 # Get data from the database
-sensor_info_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
+sensorinfo_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
 
 ####### Combine VU and WUR data #######
 # Combine the two DataFrames
-pivoted_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
 
 # Combine the two sensor_info DataFrames
-sensor_info_df = pd.concat([sensor_info_df_wur, sensor_info_df_vu], ignore_index=True)
+sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
 
 ####### Group the data into parts to separate plots #######
 # make groups of sensor_ids by variable_name
-sensor_groups = sensor_info_df.groupby('variable_name')['sensor_id'].apply(list).to_dict()
+sensor_groups = sensorinfo_df.groupby('variable_name')['sensor_id'].apply(list).to_dict()
 
 # # make groups of sensor_ids by variable_name and source
-# sensor_groups = sensor_info_df.groupby(['variable_name', 'source'])['sensor_id'].apply(list).to_dict()
+# sensor_groups = sensorinfo_df.groupby(['variable_name', 'source'])['sensor_id'].apply(list).to_dict()
 
 # # make groups of sensor_ids by variable_name and source. I the group reaches more than 6 sensor_ids, split it into smaller groups
 # sensor_groups = {}
-# for (var_name, source), group in sensor_info_df.groupby(['variable_name', 'source']):
+# for (var_name, source), group in sensorinfo_df.groupby(['variable_name', 'source']):
 #     sensor_ids = group['sensor_id'].tolist()
 #     # Split into smaller groups if the number of sensor_ids is greater than 6
 #     for i in range(0, len(sensor_ids), 6):
@@ -66,7 +66,7 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     dcc.Store(id='zoom-store', data={'x_range': None}),
     html.Div([
-        dcc.Graph(id=f'graph-{i}', figure=make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor_names[i]))
+        dcc.Graph(id=f'graph-{i}', figure=make_figure(data_df, sensorinfo_df, sensor_groups, sensor_names[i]))
         for i in range(nfigs)
     ])
 ])
@@ -114,7 +114,7 @@ app.layout = html.Div([
 # )
 # def update_graphs(zoom_data):
 #     x_range = zoom_data.get('x_range') if zoom_data else None
-#     return [make_figure(pivoted_df, sensor_info_df, sensor_groups, sensor_names[i], x_range) for i in range(nfigs)]
+#     return [make_figure(data_df, sensorinfo_df, sensor_groups, sensor_names[i], x_range) for i in range(nfigs)]
 
 if __name__ == "__main__":
     app.run_server(debug=True)
