@@ -1,6 +1,8 @@
 from get_dbstring import get_dbstring
 from config import load_config
 import psycopg2
+from psycopg2.extras import RealDictCursor
+import pandas as pd
 
 def get_siteids_vu(shortname):
     db_string = get_dbstring(shortname)    
@@ -53,5 +55,38 @@ def get_sensorids_vu(siteid, varname=None):
                   print(row)
               return sensor_ids
                 
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+
+def get_data_vu(sensorid, start_dt, end_dt):
+    sensorid_db_string = get_dbstring(sensorid)      
+
+    """ Retrieve data from the vendors table """
+    config  = load_config(filename='database.ini', section='postgresql_vu')
+    try:
+        with psycopg2.connect(**config) as conn:
+            # with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+              query = f"""
+              SELECT dt, logicid, value
+              FROM cdr.pointdata
+              WHERE logicid IN ({sensorid_db_string})
+                AND dt BETWEEN %s AND %s
+              """
+              cur.execute(query, (start_dt, end_dt))
+              data_result = cur.fetchall()
+              if not data_result:
+                print(f"No data found for period {start_dt} - {end_dt}")
+                return None
+              # Convert the result to a DataFrame
+              df = pd.DataFrame(data_result)
+              # # Get columnnr 0 from rows
+              # sensor_ids = [row[0] for row in rows]
+              # print("The number of parts: ", cur.rowcount)
+              
+              # for row in rows:
+              #     print(row)
+              # return sensor_ids
+              return df  
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
