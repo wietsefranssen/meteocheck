@@ -334,7 +334,7 @@ def get_sensorinfo_by_site_and_varname(check_table):
     return sensor_info
 
 
-def get_check_table_db(source = 'wur_db', check_table_filename='check_table_new.csv'):
+def get_check_table_db(source = 'wur_db', check_table_filename='check_table_base.csv'):
     # Get the check_table
     check_table = get_check_table2(check_table_filename)
 
