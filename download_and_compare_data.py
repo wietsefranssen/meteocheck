@@ -1,24 +1,16 @@
-from config import load_config
-from get_dbstring import get_dbstring
-import pandas as pd
-import numpy as np
-from vudb import get_sensor_units
-from functions_db import get_siteids_vu, get_data_vu, get_sensorinfo_vu, get_sensorinfo_siteid_name_combo_vu, get_sensorinfo_by_site_and_varname_vu
 from functions_general import fix_start_end_dt, get_stations_table, get_check_table_db
+from functions_db import get_siteids_vu, get_data_vu, get_sensorinfo_vu, get_sensorinfo_siteid_name_combo_vu, get_sensorinfo_by_site_and_varname_vu
 from functions_db import get_data_wur
 from functions_plot import make_figure   
+
+import pandas as pd
+import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State, ctx
-from plotly.subplots import make_subplots
 
-# if __name__ == '__main__':
-  
-# Define end_date as today
-end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
-
-# Define start_date as 7 days before today
-start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
-start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
+# Set the start and end dates for the data retrieval
+start_dt, end_dt = fix_start_end_dt(start_dt=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d'), 
+                                    end_dt=pd.to_datetime('today').strftime('%Y-%m-%d'))
 
 # Get the variables_table
 stations_table = get_stations_table("stations.csv")
@@ -27,23 +19,24 @@ stations_table = get_stations_table("stations.csv")
 # Get the check_table
 check_table_wurdb = get_check_table_db(stations_table, source = 'wur_db')
 
-
-#############################
 # Get data from the database
-sensor_info_df_wur, pivoted_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
+sensor_info_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
 
 ####### VU DB DATA RETRIEVAL #######
 # Get the check_table
 check_table_vudb = get_check_table_db(stations_table, source = 'vu_db')
 
-# Get data from the vu_db database
-sensor_info_df_vu, pivoted_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
+# Get data from the database
+sensor_info_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
 
+####### Combine VU and WUR data #######
 # Combine the two DataFrames
-pivoted_df = pd.concat([pivoted_df_wur, pivoted_df_vu], axis=1)
+pivoted_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+
 # Combine the two sensor_info DataFrames
 sensor_info_df = pd.concat([sensor_info_df_wur, sensor_info_df_vu], ignore_index=True)
 
+####### Group the data into parts to separate plots #######
 # make groups of sensor_ids by variable_name
 sensor_groups = sensor_info_df.groupby('variable_name')['sensor_id'].apply(list).to_dict()
 
@@ -67,6 +60,7 @@ sensor_names = list(sensor_groups.keys())
 # Number of sensor names/subplots
 nfigs = len(sensor_names)
 
+####### Make dash app #######
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
