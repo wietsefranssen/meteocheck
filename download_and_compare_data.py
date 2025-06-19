@@ -1,12 +1,11 @@
-from functions_general import fix_start_end_dt
+import pandas as pd
+import dash
+from dash import dcc, html, Input, Output, State, ctx
 
+from functions_general import fix_start_end_dt
 from functions_db import get_data_from_db
 from functions_plot import make_figure   
 
-import pandas as pd
-import numpy as np
-import dash
-from dash import dcc, html, Input, Output, State, ctx
 
 # Set the start and end dates for the data retrieval
 start_dt, end_dt = fix_start_end_dt(start_dt=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d'), 

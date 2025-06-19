@@ -1,8 +1,9 @@
 import os
 import pandas as pd
+
 from functions_general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
 from functions_general import get_check_table_db
-from functions_db import get_data_wur, get_data_vu
+from functions_db import get_data
  
 if __name__ == "__main__":
 
@@ -13,7 +14,6 @@ if __name__ == "__main__":
     check_table_filename='check_table_base.csv'
     stationsfile ="stations.csv"
     path="./data3"
-
     
     # Get the variables_table
     check_table = get_check_table_db(check_table_filename=check_table_filename, stationsfile=stationsfile)
@@ -37,10 +37,10 @@ if __name__ == "__main__":
         # If 'source' is 'vu_db', get the check_table for the vu_db
         if check_table_tmp['source'].values[0] == 'vu_db':
             # Get data from the database
-            sensorinfo_df, data_df = get_data_vu(check_table_tmp, start_dt, end_dt)
+            sensorinfo_df, data_df = get_data(check_table_tmp, start_dt, end_dt, source='vu_db')
         elif check_table_tmp['source'].values[0] == 'wur_db':    
             # Get data from the database
-            sensorinfo_df, data_df = get_data_wur(check_table_tmp, start_dt, end_dt)
+            sensorinfo_df, data_df = get_data(check_table_tmp, start_dt, end_dt, source='wur_db')
         else:
             print(f"Unknown source for station {station}. Skipping...")
             continue
