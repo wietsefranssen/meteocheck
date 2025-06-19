@@ -130,7 +130,7 @@ def get_sensorinfo_siteid_name_combo_vu(siteid_names_combo):
 
     return sensor_info
 
-def get_data_vudb(sensorid, start_dt, end_dt):
+def get_data_vudb(sensorid, start_dt, end_dt, limit=None):
     
     sensorid_db_string = get_dbstring(sensorid)      
 
@@ -140,19 +140,26 @@ def get_data_vudb(sensorid, start_dt, end_dt):
     if isinstance(end_dt, datetime):
         end_dt = end_dt.strftime('%Y-%m-%d %H:%M:%S%z')
  
-    query = f"""
-    SELECT dt, logicid, value
-    FROM cdr.pointdata
-    WHERE logicid IN ({sensorid_db_string})
-    AND dt BETWEEN %s AND %s
-    """
-    # LIMIT 1000
-
+    if limit is None:
+        query = f"""
+        SELECT dt, logicid, value
+        FROM cdr.pointdata
+        WHERE logicid IN ({sensorid_db_string})
+        AND dt BETWEEN %s AND %s
+        """
+    else:
+        query = f"""
+        SELECT dt, logicid, value
+        FROM cdr.pointdata
+        WHERE logicid IN ({sensorid_db_string})
+        AND dt BETWEEN %s AND %s
+        LIMIT {limit}
+        """
     result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_vu')
  
     return result
 
-def get_data_wurdb(sensorid, start_dt, end_dt):
+def get_data_wurdb(sensorid, start_dt, end_dt, limit=None):
     
     sensorid_db_string = get_dbstring(sensorid)      
 
@@ -162,12 +169,22 @@ def get_data_wurdb(sensorid, start_dt, end_dt):
     if isinstance(end_dt, datetime):
         end_dt = end_dt.strftime('%Y-%m-%d %H:%M:%S%z')
 
-    query = f"""
-    SELECT time AS dt, sensor_id AS logicid, value
-    FROM sensor_data
-    WHERE sensor_id IN ({sensorid_db_string})
-    AND time BETWEEN %s AND %s
-    """
+    if limit is None:     
+        query = f"""
+        SELECT time AS dt, sensor_id AS logicid, value
+        FROM sensor_data
+        WHERE sensor_id IN ({sensorid_db_string})
+        AND time BETWEEN %s AND %s
+        """
+    else:
+        query = f"""
+        SELECT time AS dt, sensor_id AS logicid, value
+        FROM sensor_data
+        WHERE sensor_id IN ({sensorid_db_string})
+        AND time BETWEEN %s AND %s
+        LIMIT {limit}
+        """
+        
 
     result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_wur')
     
@@ -236,7 +253,7 @@ def get_sensorinfo_by_site_and_varname_wur(check_table):
   
     return sensor_info
 
-def get_data(check_table, start_dt, end_dt, source='wur_db'):
+def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
     
     # Check if check_table is None or empty
     if check_table is None or check_table.empty:
@@ -265,9 +282,9 @@ def get_data(check_table, start_dt, end_dt, source='wur_db'):
     
     # Get the sensor data from the database
     if source == 'vu_db':
-        data = get_data_vudb(sensorids, start_dt, end_dt)
+        data = get_data_vudb(sensorids, start_dt, end_dt, limit=limit)
     elif source == 'wur_db':
-        data = get_data_wurdb(sensorids, start_dt, end_dt)
+        data = get_data_wurdb(sensorids, start_dt, end_dt, limit=limit)
     else:
         raise ValueError(f"Unknown source: {source}. Supported sources are 'vu_db' and 'wur_db'.")
     
@@ -284,12 +301,10 @@ def get_data(check_table, start_dt, end_dt, source='wur_db'):
     data_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
 
     # Add columns that are not in the data_df but are in the sensor_info
-    for i, row in sensorinfo_df.iterrows():
-        # Get the logicid from sensorinfo_df
-        logicid = row['sensor_id']
-        if logicid not in data_df.columns:
-            # Create a new column with NaN values
-            data_df[logicid] = np.nan
+    missing_cols = set(sensorinfo_df['sensor_id']) - set(data_df.columns)
+    for col in missing_cols:
+        data_df = data_df.copy()  # Make a copy to avoid SettingWithCopyWarning
+        data_df[col] = np.nan
 
     # Put the columns in the same order as in sensor_info
     data_df = data_df[sensorids]
