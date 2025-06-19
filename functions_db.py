@@ -6,30 +6,22 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
-from functions_general import get_stations_table, get_check_table_db
+from functions_general import get_check_table_db
 
 def get_data_from_db(stationsfile="stations.csv", start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
     """
     Function to retrieve data from the WUR and VU databases.
     """
+    
     # Get the variables_table
-    stations_table = get_stations_table(stationsfile)
-
-    ####### WUR DB DATA RETRIEVAL #######
-    # Get the check_table
-    check_table_wurdb = get_check_table_db(stations_table, source='wur_db', check_table_filename=check_table_filename)
+    check_table = get_check_table_db(check_table_filename=check_table_filename, stationsfile=stationsfile)
 
     # Get data from the database
-    sensorinfo_df_wur, data_df_wur = get_data_wur(check_table_wurdb, start_dt, end_dt)
-
-    ####### VU DB DATA RETRIEVAL #######
-    # Get the check_table
-    check_table_vudb = get_check_table_db(stations_table, source='vu_db', check_table_filename=check_table_filename)
+    sensorinfo_df_wur, data_df_wur = get_data_wur(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt)
 
     # Get data from the database
-    sensorinfo_df_vu, data_df_vu = get_data_vu(check_table_vudb, start_dt, end_dt)
+    sensorinfo_df_vu, data_df_vu = get_data_vu(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt)
 
-    ####### Combine VU and WUR data #######
     # Combine the two DataFrames
     data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
 
@@ -159,8 +151,8 @@ def get_data_vudb(sensorid, start_dt, end_dt):
     FROM cdr.pointdata
     WHERE logicid IN ({sensorid_db_string})
     AND dt BETWEEN %s AND %s
-    LIMIT 1000
     """
+    # LIMIT 1000
 
     result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_vu')
  

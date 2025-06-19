@@ -124,23 +124,7 @@ def get_check_table2(filename='check_table.csv'):
     return result_df
 
 
-def get_check_table_db(stations_table, source = 'wur_db', check_table_filename='check_table_base.csv'):
-    # Get the check_table
-    check_table = get_check_table2(check_table_filename)
-
-    # Select the rows from check_table that match the Stations column with the 'name' from column from stations_table and match 'source' in the Variable column from stations_table
-    matching_names = stations_table.loc[stations_table['source'] == source, 'name'].unique()
-    check_table_db = check_table[check_table['Station'].isin(matching_names)]
-
-    # reset the index of check_table_vudb
-    check_table_db = check_table_db.reset_index(drop=True)
-
-    if check_table_db.empty:
-        return None
-    
-    return check_table_db
-
-def get_check_table_db2(check_table_filename='check_table_base.csv', stationsfile='stations.csv'):
+def get_check_table_db(check_table_filename='check_table_base.csv', stationsfile='stations.csv'):
     
     # Get the stations_table
     stations_table = get_stations_table(stationsfile)

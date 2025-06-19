@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from functions_general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
-from functions_general import get_check_table_db2
+from functions_general import get_check_table_db
+from functions_db import get_data_wur, get_data_vu
  
 if __name__ == "__main__":
 
@@ -13,10 +14,9 @@ if __name__ == "__main__":
     stationsfile ="stations.csv"
     path="./data3"
 
-    from functions_db import get_check_table_db, get_stations_table, get_data_wur, get_data_vu
     
     # Get the variables_table
-    check_table = get_check_table_db2(check_table_filename=check_table_filename, stationsfile=stationsfile)
+    check_table = get_check_table_db(check_table_filename=check_table_filename, stationsfile=stationsfile)
 
     # Loop through the stations and get the data
     for station in check_table['Station'].unique():
