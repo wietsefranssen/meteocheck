@@ -38,7 +38,6 @@ def get_data_from_db(stationsfile="stations.csv", start_dt=None, end_dt=None, ch
     
     return sensorinfo_df, data_df
 
-
 def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
     """
     Run a query on the PostgreSQL database and return the results.
@@ -52,21 +51,24 @@ def run_pg_query(query, params=None, config_file='database.ini', config_section=
     """
     config = load_config(filename=config_file, section=config_section)
     
+    conn = None
     try:
         with psycopg2.connect(**config) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, params)
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows)
-
+                
                 return df
-            
+
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
+        return None
 
     finally:
         if conn is not None:
             conn.close()
+            
 
 def get_sensorinfo_wur(shortname):
     
@@ -157,6 +159,7 @@ def get_data_vudb(sensorid, start_dt, end_dt):
     FROM cdr.pointdata
     WHERE logicid IN ({sensorid_db_string})
     AND dt BETWEEN %s AND %s
+    LIMIT 1000
     """
 
     result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_vu')
@@ -172,10 +175,12 @@ def get_sensorinfo_by_site_and_varname_vu(check_table):
     siteid_name = get_siteids_vu(sites)
         
     # Match the 'Station' in check_table with the 'name' in siteid_name2 and add a new column 'siteid' to check_table with matched site_id values 
-    check_table['siteid'] = check_table['Station'].map(dict(zip(siteid_name['name'], siteid_name['site_id'])))
+    mapping = dict(zip(siteid_name['name'], siteid_name['site_id']))
+    check_table = check_table.copy()
+    check_table.loc[:, 'siteid'] = check_table['Station'].map(mapping)
 
     # Conert NaN values in the siteid column to -9999 and make in integer
-    check_table['siteid'] = check_table['siteid'].fillna(-9999).astype(int)
+    check_table.loc[:, 'siteid'] = check_table['siteid'].fillna(-9999).astype(int)
     
     # siteid and Variable columns from check_table
     siteid_varname = check_table[['siteid', 'Variable']].drop_duplicates()
@@ -260,6 +265,10 @@ def get_data_wur(check_table, start_dt, end_dt):
     # Get the sensor_info by site and varname combination
     sensorinfo_df = get_sensorinfo_by_site_and_varname_wur(check_table)
         
+    # Check if sensorinfo_df is None or empty
+    if sensorinfo_df is None or sensorinfo_df.empty:
+        return None, None
+    
     # Check if all items od check_table are in sensorinfo_df
     missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensorinfo_df.set_index(['site_name', 'sensor_name']).index)]
     if not missing_items.empty:
@@ -374,7 +383,11 @@ def get_sensorinfo_by_site_and_varname_wur(check_table):
     
     # Get the siteid and siteid_name from the database
     sensor_info = get_sensorinfo_wur(sites)
-        
+    
+    if sensor_info is None or sensor_info.empty:
+        print("No sensor information found for the specified sites.")
+        return None
+    
     # Only keep the rows where the sensor_name is in the check_table
     sensor_info = sensor_info[sensor_info['sensor_name'].isin(check_table['Variable'].tolist())] 
 

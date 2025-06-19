@@ -29,7 +29,6 @@ def adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz):
         with open(file, 'r') as f:
             column_names = f.readline().strip().split(',')
             units = f.readline().strip().split(',')
-            aggregation = f.readline().strip().split(',')
         
         # Read only the last line of the file to get the last date
         with open(file, 'rb') as f:
@@ -140,3 +139,19 @@ def get_check_table_db(stations_table, source = 'wur_db', check_table_filename='
         return None
     
     return check_table_db
+
+def get_check_table_db2(check_table_filename='check_table_base.csv', stationsfile='stations.csv'):
+    
+    # Get the stations_table
+    stations_table = get_stations_table(stationsfile)
+    
+    # Get the check_table
+    check_table = get_check_table2(check_table_filename)
+
+    # Add a 'source' column to the check_table by mapping the 'Station' column to the 'name' column in stations_table
+    check_table['source'] = check_table['Station'].map(stations_table.set_index('name')['source'])
+    
+    if check_table.empty:
+        return None
+    
+    return check_table
