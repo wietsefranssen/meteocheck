@@ -5,6 +5,9 @@ database.ini
 
 # Data folders
 data/
+data copy/
+data2/
+data3/
 
 # Development information
 # This folder contains development information and should not be shared publicly.
