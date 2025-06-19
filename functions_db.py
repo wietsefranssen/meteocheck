@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
-from functions_general import get_check_table_db
+from functions_general import get_check_table
 
 def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
     """
@@ -39,13 +39,13 @@ def run_pg_query(query, params=None, config_file='database.ini', config_section=
         if conn is not None:
             conn.close()
 
-def get_data_from_db(stationsfile="stations.csv", start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
+def get_data_from_db(start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
     """
     Function to retrieve data from the WUR and VU databases.
     """
     
     # Get the variables_table
-    check_table = get_check_table_db(check_table_filename=check_table_filename, stationsfile=stationsfile)
+    check_table = get_check_table(filename=check_table_filename)
 
     # Get data from the database
     sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')

@@ -11,7 +11,7 @@ from functions_plot import make_figure
 start_dt, end_dt = fix_start_end_dt(start_dt=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d'), 
                                     end_dt=pd.to_datetime('today').strftime('%Y-%m-%d'))
 
-sensorinfo_df, data_df = get_data_from_db(stationsfile="stations.csv", start_dt=start_dt, end_dt=end_dt, check_table_filename='check_table_base.csv')
+sensorinfo_df, data_df = get_data_from_db(start_dt=start_dt, end_dt=end_dt, check_table_filename='check_table_base.csv')
 
 ####### Group the data into parts to separate plots #######
 # make groups of sensor_ids by variable_name

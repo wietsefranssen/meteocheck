@@ -64,42 +64,7 @@ def adapt_start_dt_to_existing_dataset(start_dt, end_dt, file, tz):
     
     return start_dt
 
-def get_stations_table(filename='stations.csv'):
-    """ 
-    This function reads the .csv file and returns a DataFrame with the columns and index names
-    """
-    # Read in .csv file 
-    data = pd.read_csv(filename, sep=';')
-    
-    # Remove any leading or trailing whitespace from the column names
-    data.columns = data.columns.str.strip()
-
-    result_df = pd.DataFrame(data)
-    return result_df
-
 def get_check_table(filename='check_table.csv'):
-    """ 
-    This function reads the check_table.csv file and returns a DataFrame with the columns and index names
-    where the value is 'x'.
-    """
-    # Read in check_table.csv file 
-    check_table = pd.read_csv(filename, index_col=0)
-    
-    # Remove any leading or trailing whitespace from the column names
-    check_table.columns = check_table.columns.str.strip()
-    # Remove any leading or trailing whitespace from the index names
-    check_table.index = check_table.index.str.strip()
-    
-    result = []
-    for idx in check_table.index:
-        for col in check_table.columns:
-            if check_table.loc[idx, col] == 'x':
-                result.append({'Station': col, 'Variable': idx})
-
-    result_df = pd.DataFrame(result)
-    return result_df
-
-def get_check_table2(filename='check_table.csv'):
     """ 
     This function reads the check_table.csv file and returns a DataFrame with the columns and index names
     where the value is 'x'.
@@ -111,31 +76,21 @@ def get_check_table2(filename='check_table.csv'):
     check_table.columns = check_table.columns.str.strip()
     # Remove any leading or trailing whitespace from the index names
     check_table.index = check_table.index.str.strip()
+    # Remove any leading or trailing whitespace from the values
+    # check_table = check_table.applymap(lambda x: x.strip() if isinstance(x, str) else x)
     
     result = []
     for idx in check_table.index:
-        for col in check_table.columns:
+        # for each station index, check each column except the first one
+        for col in check_table.columns[1:]:
             # Check if not empty or NaN or None or 0
             if pd.notna(check_table.loc[idx, col]) and check_table.loc[idx, col] != '' and check_table.loc[idx, col] != 0:
             # if check_table.loc[idx, col] == 'x':
-                result.append({'Station': idx, 'Variable': check_table.loc[idx, col],'Variable_name': col})
+                result.append({'Station': idx, 'Variable': check_table.loc[idx, col],'Variable_name': col,'source': check_table.loc[idx, 'source']})
 
     result_df = pd.DataFrame(result)
-    return result_df
-
-
-def get_check_table_db(check_table_filename='check_table_base.csv', stationsfile='stations.csv'):
     
-    # Get the stations_table
-    stations_table = get_stations_table(stationsfile)
-    
-    # Get the check_table
-    check_table = get_check_table2(check_table_filename)
-
-    # Add a 'source' column to the check_table by mapping the 'Station' column to the 'name' column in stations_table
-    check_table['source'] = check_table['Station'].map(stations_table.set_index('name')['source'])
-    
-    if check_table.empty:
+    if result_df.empty:
         return None
-    
-    return check_table
+
+    return result_df
