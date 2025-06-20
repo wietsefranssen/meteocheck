@@ -1,5 +1,6 @@
 import plotly.graph_objects as go
 import plotly.colors
+print(plotly.__version__)
 
 # for sensor in sensor_names:
 def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_range=None):
@@ -9,6 +10,7 @@ def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_r
     sensor_color_map = {sensor: color_seq[i % len(color_seq)] for i, sensor in enumerate(sitenames)}
 
     downsample_factor = 30  # Adjust this value to control the downsampling rate
+    # downsample_factor = 30  # Adjust this value to control the downsampling rate
     # shared_x = data_df.index[::downsample_factor]
 
     # Create a mapping from sensor_id to various attributes
