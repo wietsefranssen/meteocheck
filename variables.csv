@@ -1,0 +1,17 @@
+variable;long_name
+SWIN; Shortwave incoming radiation
+PAR; Photosynthetically Active Radiation
+NIR; Near Infrared Radiation
+RPR; Reflected Photosynthetically Active Radiation
+RNR; Reflected Near Infrared Radiation
+SWOT; Shortwave outgoing radiation
+LWIN; Longwave incoming radiation
+LWOT; Longwave outgoing radiation
+ATMP; Air temperature
+RHUM; Relative humidity
+RAIR; Air pressure
+RAIN; Rainfall
+WIND; Wind direction
+WINS; Wind speed
+HEFL; Heat flux
+HELF2; Heat flux 2

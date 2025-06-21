@@ -20,6 +20,8 @@ def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_r
     sensor_id_to_site_name = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['site_name']))
     sensor_id_to_variable_name = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['variable_name']))
     sensor_id_to_source = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['source']))
+    sensor_id_to_longname = dict(zip(sensorinfo_df['sensor_id'], sensorinfo_df['long_name']))
+    
 
     shared_x = data_df.index[::downsample_factor]
     # shared_x = data_df.index[::downsample_factor]
@@ -43,7 +45,8 @@ def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_r
         sitename = sensor_id_to_site_name.get(sensor_id, "")
         sensor_name = sensor_id_to_sensor_name.get(sensor_id, "")
         var_name = sensor_id_to_variable_name.get(sensor_id, "")
-        source = sensor_id_to_source.get(sensor_id, "")
+        long_name = sensor_id_to_longname.get(sensor_id, "")
+        source = sensor_id_to_source.get(sensor_id, "")     
         fig.add_trace(
             go.Scattergl(
                 x=shared_x,  # Plot every 10th point for performance
@@ -59,7 +62,7 @@ def make_figure(data_df, sensorinfo_df, sensor_groups, sensor, x_range=None, y_r
         )
     fig.update_layout(
         # title=f"{sensor.capitalize()} Data",
-        title=f"{var_name}",
+        title=f"{var_name} - {long_name}",
         # xaxis_title="timedate",
         yaxis_title=unit if unit else "Value",
         legend_title="Measurement",
