@@ -1,10 +1,12 @@
 import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
+import os
 
 from functions_general import fix_start_end_dt
 from functions_db import get_data_from_db
 from functions_plot import make_figure   
+from functions_last_retrieval import check_dates_last_retrieval, check_checktable_last_retrieval, check_if_download_data_needed
 
 print(dash.__version__)
 # Set the start and end dates for the data retrieval
@@ -22,66 +24,23 @@ lastrun_info_file = 'last_run_config.txt'
 data_df_file = 'data.pkl'
 sensorinfo_df_file = 'sensorinfo.pkl'    
 
-# Create the directory if it doesn't exist
-import os
-if not os.path.exists(lastrun_info_path):
-    os.makedirs(lastrun_info_path)
-
 # Save the start and end dates to a text file
 lastrun_info_file = os.path.join(lastrun_info_path, lastrun_info_file)
 check_table_file = os.path.join(lastrun_info_path, 'check_table.txt')
 
-# Read start and end dates from the text file
-if os.path.exists(lastrun_info_file):
-    with open(lastrun_info_file, 'r') as f:
-        lines = f.readlines()
-        start_dt_retrieved = lines[0].strip().split(': ')[1]
-        end_dt_retrieved = lines[1].strip().split(': ')[1]
-        
-        # Convert the retrieved dates to datetime objects for comparison (format: 2025-06-13 00:00:00+00:00)
-        start_dt_retrieved = pd.to_datetime(start_dt_retrieved)
-        end_dt_retrieved = pd.to_datetime(end_dt_retrieved)
-        # compare the retrieved start and end dates with the original start and end dates
 
-    if start_dt == start_dt_retrieved and end_dt == end_dt_retrieved:
-        print("Start and end dates retrieved successfully and match the original dates.")
-        dates_match = True
-    else:
-        print("Start and/or end dates retrieved do not match the original dates. There might be an issue with the retrieval process.")
-        dates_match = False
-else:
-    dates_match = False
+dates_match = check_dates_last_retrieval(lastrun_info_file, start_dt, end_dt)
+check_table_match = check_checktable_last_retrieval(check_table_file, check_table)
 
-if os.path.exists(check_table_file):
-    print(f"Check table file found: {check_table_file}")
-    # Read check_table from the text file and compare it with the original check_table
-    check_table_retrieved = pd.read_csv(check_table_file, sep=r'\s+')
-    # Compare the retrieved check_table with the original check_table
-    if check_table.equals(check_table_retrieved):
-        print("Check table retrieved successfully and matches the original check table.")
-        check_table_match = True
-    else:
-        print("Check table retrieved does not match the original check table. There might be an issue with the retrieval process.")
-        check_table_match = False
-else:
-    print(f"Check table file not found: {check_table_file}. Proceeding to fetch data from the database.")
-    check_table_match = False
+# Create the directory if it doesn't exist
+if not os.path.exists(lastrun_info_path):
+    os.makedirs(lastrun_info_path)
 
 # If the dates and check_table match, read the data and sensorinfo from the pickle files
 data_df_file = os.path.join(lastrun_info_path, data_df_file)
 sensorinfo_df_file = os.path.join(lastrun_info_path, sensorinfo_df_file)
-# read pickle file data_df_file
 
-if dates_match and check_table_match:
-    if os.path.exists(data_df_file) and os.path.exists(sensorinfo_df_file):
-        print(f"Data files found: {data_df_file} and {sensorinfo_df_file}")
-        download_data = False
-    else:
-        print(f"Data files not found: {data_df_file} and {sensorinfo_df_file}. Proceeding to fetch data from the database.")
-        download_data = True
-else:
-    print("Dates or check table do not match. Proceeding to fetch data from the database.")
-    download_data = True    
+download_data = check_if_download_data_needed(dates_match, check_table_match, data_df_file, sensorinfo_df_file) 
 
 if download_data:
     print("Dates or check table do not match. Proceeding to fetch data from the database.")
@@ -295,8 +254,8 @@ if len(wind_speeds) > 0 and len(wind_dirs) > 0:
     dir_bins = pd.cut(wind_dirs, bins, labels=labels, include_lowest=True)
     # For each direction bin, compute mean wind speed (or count, as you prefer)
     rose = pd.DataFrame({'speed': wind_speeds, 'dir_bin': dir_bins})
-    rose_counts = rose.groupby('dir_bin')['speed'].count()
-    rose_means = rose.groupby('dir_bin')['speed'].mean()
+    rose_counts = rose.groupby('dir_bin', observed=False)['speed'].count()
+    rose_means = rose.groupby('dir_bin', observed=False)['speed'].mean()
 
     windrose_fig = go.Figure()
     windrose_fig.add_trace(go.Barpolar(
@@ -403,7 +362,9 @@ def update_highlight_graph(active_cell, show_outliers, outlier_method):
             x=data_df.index,
             y=y,
             mode='lines+markers',
-            name=f"{sensorinfo_df[sensorinfo_df['sensor_id'] == sensor]['site_name'].iloc[0]} ({sensor})"
+            name=f"{sensorinfo_df[sensorinfo_df['sensor_id'] == sensor]['site_name'].iloc[0]} ({sensor})",
+            line=dict(width=1),
+            marker=dict(size=3)
         ))
         # Highlight outliers if this is an ATMP sensor and user wants to see them
         if var == 'ATMP' and sensor in atmp_data.columns and 'show' in show_outliers:
