@@ -5,10 +5,7 @@ database.ini
 
 # Data folders
 data/
-data copy/
-data2/
-data3/
-data3 copy/
+data_full/
 last_retrieval_info/
 
 # Development information

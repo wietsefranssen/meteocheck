@@ -3,10 +3,10 @@ import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
 import os
 
-from functions_general import fix_start_end_dt
-from functions_db import get_data_from_db
-from functions_plot import make_figure   
-from functions_last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
+from src.general import fix_start_end_dt
+from src.db import get_data_from_db
+from src.plot import make_figure   
+from src.last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
 
 # Set the start and end dates for the data retrieval
 check_table_filename='check_table_base.csv'
@@ -173,7 +173,6 @@ sensor_groups = sensorinfo_df.groupby('variable_name')['sensor_id'].apply(list).
 
 # List of sensor names
 sensor_names = list(sensor_groups.keys())
-
 
 #######################
 import numpy as np

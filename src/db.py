@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
-from functions_general import get_check_table
+from src.general import get_check_table
 
 def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
     """

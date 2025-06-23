@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 
-from functions_general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
-from functions_general import get_check_table
-from functions_db import get_data
+from src.general import fix_start_end_dt, adapt_start_dt_to_existing_dataset
+from src.general import get_check_table
+from src.db import get_data
  
 if __name__ == "__main__":
 
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     end_dt_init=pd.to_datetime('today').strftime('%Y-%m-%d')
     tz="Etc/GMT-1"
     check_table_filename='check_table_base.csv'
-    path="./data3"
+    path="./data_full"
     
     # Get the variables_table
     check_table = get_check_table(filename=check_table_filename)
