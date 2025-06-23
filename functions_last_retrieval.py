@@ -25,8 +25,6 @@ def check_dates_last_retrieval(lastrun_info_file, start_dt, end_dt):
         dates_match = False
     return dates_match
 
-
-
 def check_checktable_last_retrieval(check_table_file, check_table):
     if os.path.exists(check_table_file):
         print(f"Check table file found: {check_table_file}")
@@ -45,7 +43,10 @@ def check_checktable_last_retrieval(check_table_file, check_table):
     return check_table_match
 
 # Check if the data files exist and if the dates and check_table match
-def check_if_download_data_needed(dates_match, check_table_match, data_df_file, sensorinfo_df_file):
+def check_if_download_data_needed(last_retrieval_info_file, start_dt, end_dt, last_retrieval_checktable_file, check_table, data_df_file, sensorinfo_df_file):
+    dates_match = check_dates_last_retrieval(last_retrieval_info_file, start_dt, end_dt)
+    check_table_match = check_checktable_last_retrieval(last_retrieval_checktable_file, check_table)
+
     if dates_match and check_table_match:
         if os.path.exists(data_df_file) and os.path.exists(sensorinfo_df_file):
             print(f"Data files found: {data_df_file} and {sensorinfo_df_file}")
@@ -56,3 +57,39 @@ def check_if_download_data_needed(dates_match, check_table_match, data_df_file, 
     else:
         print("Dates or check table do not match. Proceeding to fetch data from the database.")
         return True  # Need to download data
+    
+# Add extra info to sensorinfo_df
+def add_extra_info_to_sensorinfo(sensorinfo_df, variable_info_file):
+    # Read variable.csv file
+    variable_df = pd.read_csv(variable_info_file, sep=';')
+    # Map variable from variable_df to variable_name in sensorinfo_df and add the long_name from variable_df to sensorinfo_df
+    sensorinfo_df['long_name'] = sensorinfo_df['variable_name'].map(variable_df.set_index('variable')['long_name'])
+
+    return sensorinfo_df
+  
+def save_last_retrieval_info(check_table, start_dt, end_dt, last_retrieval_info_file, last_retrieval_checktable_file):
+    """
+    Save the start and end dates to a text file.
+    """
+    
+    # Get the directory of the last retrieval info file
+    last_retrieval_info_path = os.path.dirname(last_retrieval_info_file)
+    
+    # Create the directory if it doesn't exist
+    if not os.path.exists(last_retrieval_info_path):
+        os.makedirs(last_retrieval_info_path)
+
+    # Get the directory of the last retrieval check table file
+    last_retrieval_checktable_path = os.path.dirname(last_retrieval_checktable_file)
+    
+    # Create the directory if it doesn't exist
+    if not os.path.exists(last_retrieval_checktable_path):
+        os.makedirs(last_retrieval_checktable_path)    
+
+    with open(last_retrieval_info_file, 'w') as f:
+        f.write(f"Start date: {start_dt}\n")
+        f.write(f"End date: {end_dt}\n")
+        
+    # Save the check_table to a text file
+    with open(last_retrieval_checktable_file, 'w') as f:
+        f.write(check_table.to_string(index=False))

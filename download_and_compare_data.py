@@ -6,68 +6,55 @@ import os
 from functions_general import fix_start_end_dt
 from functions_db import get_data_from_db
 from functions_plot import make_figure   
-from functions_last_retrieval import check_dates_last_retrieval, check_checktable_last_retrieval, check_if_download_data_needed
+from functions_last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
 
-print(dash.__version__)
 # Set the start and end dates for the data retrieval
 check_table_filename='check_table_base.csv'
 
-start_dt, end_dt = fix_start_end_dt(start_dt=(pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d'), 
-                                    end_dt=pd.to_datetime('today').strftime('%Y-%m-%d'))
-
-
-# read check_table_filename
-check_table = pd.read_csv(check_table_filename)
-
-lastrun_info_path = 'lastrun_info'
-lastrun_info_file = 'last_run_config.txt'
+# Define the full paths for the data files
+data_path = 'data'
 data_df_file = 'data.pkl'
 sensorinfo_df_file = 'sensorinfo.pkl'    
+data_df_file = os.path.join(data_path, data_df_file)
+sensorinfo_df_file = os.path.join(data_path, sensorinfo_df_file)
+
+variable_info_file = 'variables.csv'
+# Define the start and end dates for the data retrieval
+start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
+
+# Fix the start and end dates to ensure they are in the correct format
+start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
+
+# Read check_table_filename
+check_table = pd.read_csv(check_table_filename)
+
+###############################
+last_retrieval_info_path = 'last_retrieval_info'
+last_retrieval_info_file = 'last_run_config.txt'
+last_retrieval_checktable_file = 'check_table.txt'
 
 # Save the start and end dates to a text file
-lastrun_info_file = os.path.join(lastrun_info_path, lastrun_info_file)
-check_table_file = os.path.join(lastrun_info_path, 'check_table.txt')
+last_retrieval_info_file = os.path.join(last_retrieval_info_path, last_retrieval_info_file)
+last_retrieval_checktable_file = os.path.join(last_retrieval_info_path, last_retrieval_checktable_file)
 
+# Check if the rast retrieval match the current one
+download_data = check_if_download_data_needed(last_retrieval_info_file, start_dt, end_dt, last_retrieval_checktable_file, check_table, data_df_file, sensorinfo_df_file)
 
-dates_match = check_dates_last_retrieval(lastrun_info_file, start_dt, end_dt)
-check_table_match = check_checktable_last_retrieval(check_table_file, check_table)
-
-# Create the directory if it doesn't exist
-if not os.path.exists(lastrun_info_path):
-    os.makedirs(lastrun_info_path)
-
-# If the dates and check_table match, read the data and sensorinfo from the pickle files
-data_df_file = os.path.join(lastrun_info_path, data_df_file)
-sensorinfo_df_file = os.path.join(lastrun_info_path, sensorinfo_df_file)
-
-download_data = check_if_download_data_needed(dates_match, check_table_match, data_df_file, sensorinfo_df_file) 
-
+# Get the data from the database or read from the pickle files
 if download_data:
-    print("Dates or check table do not match. Proceeding to fetch data from the database.")
     sensorinfo_df, data_df = get_data_from_db(start_dt=start_dt, end_dt=end_dt, check_table_filename=check_table_filename)
 
-    # Save the data to CSV files and save a pickle file for faster loading next time
-    # data_df.to_csv('data.csv', index=True)
-    # sensorinfo_df.to_csv('sensorinfo.csv', index=True)
     data_df.to_pickle(data_df_file)
     sensorinfo_df.to_pickle(sensorinfo_df_file)
 else:
     data_df = pd.read_pickle(data_df_file)
     sensorinfo_df = pd.read_pickle(sensorinfo_df_file) 
 
-# Read variable.csv file
-variable_df = pd.read_csv('variables.csv', sep=';')
-# Map variable from variable_df to variable_name in sensorinfo_df and add the long_name from variable_df to sensorinfo_df
-sensorinfo_df['long_name'] = sensorinfo_df['variable_name'].map(variable_df.set_index('variable')['long_name'])
+sensorinfo_df = add_extra_info_to_sensorinfo(sensorinfo_df, variable_info_file)
 
-# Save the start and end dates to a text file
-with open(lastrun_info_file, 'w') as f:
-    f.write(f"Start date: {start_dt}\n")
-    f.write(f"End date: {end_dt}\n")
-# Save the check_table to a text file
-with open(check_table_file, 'w') as f:
-    f.write(check_table.to_string(index=False))
-
+save_last_retrieval_info(check_table, start_dt, end_dt, last_retrieval_info_file, last_retrieval_checktable_file)
+################################
 
 # if select sensor_ids from the sensorinfo_df with variable_name 'RAIR' and site_name 'GOB_44_MT', 'GOI_38_MT', 'GOB_45_MT'
 sel_names = ['GOB_44_MT', 'BUO_31_MT', 'BUW_32_MT', 'HOH_33_MT', 'HOC_34_MT', 'LDH_35_MT',
@@ -225,64 +212,9 @@ rolling_std = atmp_data.rolling(window, min_periods=1, center=True).std()
 rolling_zscore = (atmp_data - rolling_mean) / rolling_std
 rolling_outlier_mask = np.abs(rolling_zscore) > 4
 
-# wind speed sensor_ids
-wind_speed_sensor_ids = sensorinfo_df[sensorinfo_df['variable_name'] == 'WINS']['sensor_id'].tolist()
-wind_direction_sensor_ids = sensorinfo_df[sensorinfo_df['variable_name'] == 'WIND']['sensor_id'].tolist()
-
-
-import numpy as np
-import plotly.graph_objects as go
-
-# Collect all wind speed and direction data into a single array
-wind_speeds = []
-wind_dirs = []
-
-for speed_id, dir_id in zip(wind_speed_sensor_ids, wind_direction_sensor_ids):
-    if speed_id in data_df.columns and dir_id in data_df.columns:
-        # Drop rows where either is NaN
-        df = data_df[[speed_id, dir_id]].dropna()
-        wind_speeds.extend(df[speed_id].values)
-        wind_dirs.extend(df[dir_id].values)
-
-wind_speeds = np.array(wind_speeds)
-wind_dirs = np.array(wind_dirs)
-
-if len(wind_speeds) > 0 and len(wind_dirs) > 0:
-    # Bin directions (e.g., every 30 degrees)
-    bins = np.arange(0, 361, 30)
-    labels = (bins[:-1] + bins[1:]) / 2
-    dir_bins = pd.cut(wind_dirs, bins, labels=labels, include_lowest=True)
-    # For each direction bin, compute mean wind speed (or count, as you prefer)
-    rose = pd.DataFrame({'speed': wind_speeds, 'dir_bin': dir_bins})
-    rose_counts = rose.groupby('dir_bin', observed=False)['speed'].count()
-    rose_means = rose.groupby('dir_bin', observed=False)['speed'].mean()
-
-    windrose_fig = go.Figure()
-    windrose_fig.add_trace(go.Barpolar(
-        r=rose_counts.values,
-        theta=rose_counts.index.astype(float),
-        width=30,
-        marker_color=rose_means.values,
-        marker_colorscale='Viridis',
-        opacity=0.8,
-        name='Windrose'
-    ))
-    windrose_fig.update_layout(
-        title='Windrose (all WIND sensors)',
-        polar=dict(
-            angularaxis=dict(direction='clockwise', rotation=90)
-        )
-    )
-else:
-    windrose_fig = go.Figure()
-    windrose_fig.update_layout(title='No wind data available')
-
 #############
 # Number of sensor names/subplots
 nfigs = len(sensor_names)
-
-
-
 
 # print min and max and average of data_df[23724]
 # print(f"Min: {data_df[23724].min()}, Max: {data_df[23724].max()}, Avg: {data_df[23724].mean()}")
@@ -293,7 +225,6 @@ nfigs = len(sensor_names)
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
-    dcc.Graph(figure=windrose_fig),
     html.H3("NaN Overview Table (click a cell to highlight below)"),
     datatable,
     dcc.Checklist(
@@ -378,6 +309,7 @@ def update_highlight_graph(active_cell, show_outliers, outlier_method):
             ))
     fig.update_layout(title=f"{site} - {var}")
     return fig
+
 if __name__ == "__main__":
     app.run(debug=True)
 # @app.callback(
