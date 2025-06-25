@@ -1,5 +1,6 @@
 variable;long_name
-SWIN; Shortwave incoming radiation
+SWIN_1; Shortwave incoming radiation (Apogee)
+SWIN_2; Shortwave incoming radiation (Huxeflux op maximet)
 PAR; Photosynthetically Active Radiation
 NIR; Near Infrared Radiation
 RPR; Reflected Photosynthetically Active Radiation
@@ -9,7 +10,7 @@ LWIN; Longwave incoming radiation
 LWOT; Longwave outgoing radiation
 ATMP; Air temperature
 RHUM; Relative humidity
-RAIR; Air pressure
+PAIR; Air pressure
 RAIN; Rainfall
 WIND; Wind direction
 WINS; Wind speed

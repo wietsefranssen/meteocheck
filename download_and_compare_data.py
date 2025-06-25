@@ -20,14 +20,18 @@ sensorinfo_df_file = os.path.join(data_path, sensorinfo_df_file)
 
 variable_info_file = 'variables.csv'
 # Define the start and end dates for the data retrieval
-start_dt = (pd.to_datetime('today') - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+start_dt = (pd.to_datetime('today') - pd.DateOffset(days=6)).strftime('%Y-%m-%d')
 end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
+
+# Substract 2 days from start_dt
+start_dt = (pd.to_datetime(start_dt) - pd.DateOffset(days=2)).strftime('%Y-%m-%d')
+end_dt = (pd.to_datetime(end_dt) - pd.DateOffset(days=2)).strftime('%Y-%m-%d')
 
 # Fix the start and end dates to ensure they are in the correct format
 start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
 
 # Read check_table_filename
-check_table = pd.read_csv(check_table_filename)
+check_table = pd.read_csv(check_table_filename, sep=';')
 
 ###############################
 last_retrieval_info_path = 'last_retrieval_info'
@@ -82,8 +86,6 @@ import matplotlib.colors as mcolors
 import plotly.graph_objects as go
 import os
 
-# ... (your data loading and preprocessing code here) ...
-
 # Prepare names
 var_names = sensorinfo_df['variable_name'].unique().tolist()
 site_names = sensorinfo_df['site_name'].unique().tolist()
@@ -105,10 +107,18 @@ for site in site_names:
     row_colors = []
     for var in var_names:
         sensors = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_id'].tolist()
+        
+
+         
         if sensors:
             sensor_data = data_df[sensors]
             total = sensor_data.size
             nans = sensor_data.isna().sum().sum()
+            # # Determine if the data is in 30-minute intervals (has '_Avg' on sensorname_tmp)
+            # sensorname_tmp = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_name'].tolist()
+            # if any('_Avg' in name for name in sensorname_tmp):
+            #     nans = nans / 30 - 30 # Adjust total for 30-minute intervals
+            #     # total = total * 30
             if total > 0:
                 frac_nan = nans / total
                 row_vals.append(f"{frac_nan:.0%} NaN")
@@ -130,6 +140,8 @@ for i, site in enumerate(site_names):
         row[var] = cell_values[i][j]
     table_data.append(row)
 
+# Sort table_data by 'Site Name'
+# table_data = sorted(table_data, key=lambda x: x['Site Name'])
 style_data_conditional = []
 for i, site in enumerate(site_names):
     for j, var in enumerate(var_names):
@@ -138,6 +150,7 @@ for i, site in enumerate(site_names):
             'if': {'row_index': i, 'column_id': var},
             'backgroundColor': color
         })
+
 
 datatable = dash_table.DataTable(
     id='nan-table',
@@ -224,6 +237,11 @@ nfigs = len(sensor_names)
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
+    html.A(
+        "Open SharePoint Document",
+        href="https://wageningenur4.sharepoint.com/:x:/r/sites/Veenweiden/_layouts/15/Doc2.aspx?action=edit&sourcedoc=%7B3d741ab0-36f1-4687-953b-902b0a009582%7D&wdOrigin=TEAMS-MAGLEV.undefined_ns.rwc&wdExp=TEAMS-TREATMENT&wdhostclicktime=1750680875439&web=1",
+        target="_blank"  # Opens in new tab
+    ),
     html.H3("NaN Overview Table (click a cell to highlight below)"),
     datatable,
     dcc.Checklist(
