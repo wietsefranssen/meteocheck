@@ -6,7 +6,7 @@ database.ini
 # Data folders
 data/
 data_full/
-last_retrieval_info/
+temp/
 
 # Development information
 # This folder contains development information and should not be shared publicly.

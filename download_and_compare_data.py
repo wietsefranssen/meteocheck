@@ -7,71 +7,19 @@ from src.general import fix_start_end_dt
 from src.db import get_data_from_db
 from src.plot import make_figure   
 from src.last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
+from src.corrections import fix_pair_units
 
-# Define the full paths for the data files
-data_path = 'data'
-meta_path = 'meta'
-temp_path = 'temp'
-data_df_file = os.path.join(data_path, 'data.pkl')
-sensorinfo_df_file = os.path.join(data_path, 'sensorinfo.pkl')
-check_table_filename=os.path.join(meta_path, 'check_table_base.csv')
-variable_info_file = os.path.join(meta_path, 'variables.csv')
-# Define the start and end dates for the data retrieval
-start_dt = (pd.to_datetime('today') - pd.DateOffset(days=6)).strftime('%Y-%m-%d')
-end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
+from data_manager import DataManager
+dm = DataManager()
+print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
-# Substract 2 days from start_dt
-start_dt = (pd.to_datetime(start_dt) - pd.DateOffset(days=2)).strftime('%Y-%m-%d')
-end_dt = (pd.to_datetime(end_dt) - pd.DateOffset(days=2)).strftime('%Y-%m-%d')
+dm.download_or_load_data()
+data_df, sensorinfo_df = dm.get_data()
 
-# Fix the start and end dates to ensure they are in the correct format
-start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
+# Fix PAIR units for selected Stations
+# sel_names = ['GOB_44_MT', 'BUO_31_MT']
+# data_df = fix_pair_units(sensorinfo_df, data_df, sel_names)
 
-# Read check_table
-check_table = pd.read_csv(check_table_filename, sep=';')
-
-###############################
-# Save the start and end dates to a text file
-last_retrieval_info_file = os.path.join(temp_path, 'last_run_config.txt')
-last_retrieval_checktable_file = os.path.join(temp_path, 'check_table.txt')
-
-# Check if the rast retrieval match the current one
-download_data = check_if_download_data_needed(last_retrieval_info_file, start_dt, end_dt, last_retrieval_checktable_file, check_table, data_df_file, sensorinfo_df_file)
-
-# Get the data from the database or read from the pickle files
-if download_data:
-    sensorinfo_df, data_df = get_data_from_db(start_dt=start_dt, end_dt=end_dt, check_table_filename=check_table_filename)
-
-    data_df.to_pickle(data_df_file)
-    sensorinfo_df.to_pickle(sensorinfo_df_file)
-else:
-    data_df = pd.read_pickle(data_df_file)
-    sensorinfo_df = pd.read_pickle(sensorinfo_df_file) 
-
-sensorinfo_df = add_extra_info_to_sensorinfo(sensorinfo_df, variable_info_file)
-
-save_last_retrieval_info(check_table, start_dt, end_dt, last_retrieval_info_file, last_retrieval_checktable_file)
-################################
-
-# if select sensor_ids from the sensorinfo_df with variable_name 'RAIR' and site_name 'GOB_44_MT', 'GOI_38_MT', 'GOB_45_MT'
-sel_names = ['GOB_44_MT', 'BUO_31_MT', 'BUW_32_MT', 'HOH_33_MT', 'HOC_34_MT', 'LDH_35_MT',
- 'LDC_36_MT', 'AMM_37_MT', 'POH_39_MT', 'POG_40_MT', 'HOD_41_MT', 'MOB_42_MT',
- 'HEW_43_MT', 'HEH_42_MT', 'MOB_01_MT', 'MOB_02_MT', 'MOB_21_EC', 'GOI_38_MT',
- 'WIE_41_MT', 'ONL_22_MT', 'CAM_21_MT', 'BPB_31_MT', 'BPC_32_MT', 'PPA_42_MT',
- 'BRO_43_MT', 'BLO_36_MT', 'BLR_35_MT', 'HWG_37_MT', 'HWR_34_MT',
- 'HWN_45_MT', 'HWH_46_MT', 'WRW_SR', 'ZEG_PT']
-# sel_names = ['ZEG_PT', 'ZEG_RF', 'ALB_RF',
-#  'LAW_MS']
-sensorinfo_df_sel = sensorinfo_df[(sensorinfo_df['variable_name'] == 'RAIR') & (sensorinfo_df['site_name'].isin(sel_names))]
-
-# multiply the values in data_df by 1000 for the selected sensor_ids
-data_df[sensorinfo_df_sel['sensor_id'].tolist()] *= 10
-
-sensorinfo_df_sel = sensorinfo_df[(sensorinfo_df['variable_name'] == 'RAIR')]
-
-data_df[sensorinfo_df_sel['sensor_id'].tolist()] = data_df[sensorinfo_df_sel['sensor_id'].tolist()].where(
-    data_df[sensorinfo_df_sel['sensor_id'].tolist()] >= 1000, other=pd.NA
-)
 import pandas as pd
 import dash
 from dash import dcc, html, Input, Output
