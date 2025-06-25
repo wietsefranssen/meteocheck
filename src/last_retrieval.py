@@ -73,11 +73,11 @@ def save_last_retrieval_info(check_table, start_dt, end_dt, last_retrieval_info_
     """
     
     # Get the directory of the last retrieval info file
-    last_retrieval_info_path = os.path.dirname(last_retrieval_info_file)
+    temp_path = os.path.dirname(last_retrieval_info_file)
     
     # Create the directory if it doesn't exist
-    if not os.path.exists(last_retrieval_info_path):
-        os.makedirs(last_retrieval_info_path)
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
 
     # Get the directory of the last retrieval check table file
     last_retrieval_checktable_path = os.path.dirname(last_retrieval_checktable_file)

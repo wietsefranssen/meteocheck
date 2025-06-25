@@ -8,17 +8,14 @@ from src.db import get_data_from_db
 from src.plot import make_figure   
 from src.last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
 
-# Set the start and end dates for the data retrieval
-check_table_filename='check_table_base.csv'
-
 # Define the full paths for the data files
 data_path = 'data'
-data_df_file = 'data.pkl'
-sensorinfo_df_file = 'sensorinfo.pkl'    
-data_df_file = os.path.join(data_path, data_df_file)
-sensorinfo_df_file = os.path.join(data_path, sensorinfo_df_file)
-
-variable_info_file = 'variables.csv'
+meta_path = 'meta'
+temp_path = 'temp'
+data_df_file = os.path.join(data_path, 'data.pkl')
+sensorinfo_df_file = os.path.join(data_path, 'sensorinfo.pkl')
+check_table_filename=os.path.join(meta_path, 'check_table_base.csv')
+variable_info_file = os.path.join(meta_path, 'variables.csv')
 # Define the start and end dates for the data retrieval
 start_dt = (pd.to_datetime('today') - pd.DateOffset(days=6)).strftime('%Y-%m-%d')
 end_dt = pd.to_datetime('today').strftime('%Y-%m-%d')
@@ -30,17 +27,13 @@ end_dt = (pd.to_datetime(end_dt) - pd.DateOffset(days=2)).strftime('%Y-%m-%d')
 # Fix the start and end dates to ensure they are in the correct format
 start_dt, end_dt = fix_start_end_dt(start_dt=start_dt, end_dt=end_dt)
 
-# Read check_table_filename
+# Read check_table
 check_table = pd.read_csv(check_table_filename, sep=';')
 
 ###############################
-last_retrieval_info_path = 'last_retrieval_info'
-last_retrieval_info_file = 'last_run_config.txt'
-last_retrieval_checktable_file = 'check_table.txt'
-
 # Save the start and end dates to a text file
-last_retrieval_info_file = os.path.join(last_retrieval_info_path, last_retrieval_info_file)
-last_retrieval_checktable_file = os.path.join(last_retrieval_info_path, last_retrieval_checktable_file)
+last_retrieval_info_file = os.path.join(temp_path, 'last_run_config.txt')
+last_retrieval_checktable_file = os.path.join(temp_path, 'check_table.txt')
 
 # Check if the rast retrieval match the current one
 download_data = check_if_download_data_needed(last_retrieval_info_file, start_dt, end_dt, last_retrieval_checktable_file, check_table, data_df_file, sensorinfo_df_file)
