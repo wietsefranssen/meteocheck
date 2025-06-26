@@ -14,5 +14,29 @@ PAIR; Air pressure
 RAIN; Rainfall
 WIND; Wind direction
 WINS; Wind speed
-HEFL; Heat flux
-HELF2; Heat flux 2
+HEFL_1; Heat flux
+HELF_2; Heat flux 2
+SWC01; Soil water content 5 cm
+SWC02; Soil water content 15 cm
+SWC03; Soil water content 25 cm
+SWC04; Soil water content 35 cm
+SWC05; Soil water content 45 cm
+SWC06; Soil water content 55 cm
+SWC07; Soil water content 65 cm
+SWC08; Soil water content 76 cm
+SWC09; Soil water content 85 cm
+SWC10; Soil water content 95 cm
+SWC11; Soil water content 105 cm
+SWC12; Soil water content 115 cm
+TS01; Soil temperature 5 cm
+TS02; Soil temperature 15 cm
+TS03; Soil temperature 25 cm
+TS04; Soil temperature 35 cm
+TS05; Soil temperature 45 cm
+TS06; Soil temperature 55 cm
+TS07; Soil temperature 65 cm
+TS08; Soil temperature 76 cm
+TS09; Soil temperature 85 cm
+TS10; Soil temperature 95 cm
+TS11; Soil temperature 105 cm
+TS12; Soil temperature 115 cm

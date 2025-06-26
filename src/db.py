@@ -47,6 +47,49 @@ def get_data_from_db(start_dt=None, end_dt=None, check_table_filename='check_tab
     # Get the variables_table
     check_table = get_check_table(filename=check_table_filename)
 
+    # initialize sensorinfo_df_vu and data_df_vu
+    sensorinfo_df_vu = pd.DataFrame()
+    data_df_vu = pd.DataFrame()
+    sensorinfo_df_wur = pd.DataFrame()
+    data_df_wur = pd.DataFrame()
+    
+    # Get data from the database
+    sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
+
+    # Get data from the database
+    sensorinfo_df_vu, data_df_vu = get_data(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt, source='vu_db')
+
+    # Check if data_df_wur and data_df_vu are None or empty
+    if data_df_wur is None or data_df_wur.empty:
+        print("No data found for WUR database.")
+        data_df_wur = pd.DataFrame()
+    if data_df_vu is None or data_df_vu.empty:      
+        print("No data found for VU database.")
+        data_df_vu = pd.DataFrame()
+    # Combine the two DataFrames
+    data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+
+    # Check if sensorinfo_df_wur and sensorinfo_df_vu are None or empty
+    if sensorinfo_df_wur is None or sensorinfo_df_wur.empty:
+        print("No sensor information found for WUR database.")
+        sensorinfo_df_wur = pd.DataFrame()
+    if sensorinfo_df_vu is None or sensorinfo_df_vu.empty:
+        print("No sensor information found for VU database.")
+        sensorinfo_df_vu = pd.DataFrame()
+
+    # Combine the two sensor_info DataFrames
+    sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
+    
+    return sensorinfo_df, data_df            
+
+def get_data_from_db2(start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
+    """
+    Function to retrieve data from the WUR and VU databases.
+    """
+    
+    # Get the variables_table
+    check_table = get_check_table(filename=check_table_filename)
+
     # Get data from the database
     sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
 
@@ -287,6 +330,9 @@ def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
         data = get_data_wurdb(sensorids, start_dt, end_dt, limit=limit)
     else:
         raise ValueError(f"Unknown source: {source}. Supported sources are 'vu_db' and 'wur_db'.")
+    
+    
+    
     
     # Check if data is None or empty
     if data is None or data.empty:

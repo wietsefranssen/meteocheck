@@ -1,16 +1,13 @@
-import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
-import os
-
-from src.general import fix_start_end_dt
-from src.db import get_data_from_db
 from src.plot import make_figure   
-from src.last_retrieval import check_if_download_data_needed, add_extra_info_to_sensorinfo, save_last_retrieval_info
-from src.corrections import fix_pair_units
-
 from data_manager import DataManager
+import matplotlib.colors as mcolors
+import plotly.graph_objects as go
+
 dm = DataManager()
+dm.set_dates(days_back=4, offset=2)
+dm.set_dates(start_dt='2025-06-20', end_dt='2025-06-24 23:59:00')
 print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
 dm.download_or_load_data()
@@ -20,16 +17,14 @@ data_df, sensorinfo_df = dm.get_data()
 # sel_names = ['GOB_44_MT', 'BUO_31_MT']
 # data_df = fix_pair_units(sensorinfo_df, data_df, sel_names)
 
-import pandas as pd
-import dash
-from dash import dcc, html, Input, Output
-import matplotlib.colors as mcolors
-import plotly.graph_objects as go
-import os
-
 # Prepare names
-var_names = sensorinfo_df['variable_name'].unique().tolist()
-site_names = sensorinfo_df['site_name'].unique().tolist()
+check_table = dm.check_table
+var_names = check_table.columns[2:].tolist()
+# var_names = sensorinfo_df['variable_name'].unique().tolist()
+
+site_names = check_table['station'].unique().tolist()
+# site_names = sensorinfo_df['site_name'].unique().tolist()
+site_names.sort()  # Sort site names for consistent order
 
 # Helper for color gradient
 def nan_to_color(frac):
@@ -48,10 +43,15 @@ for site in site_names:
     row_colors = []
     for var in var_names:
         sensors = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_id'].tolist()
-        
+     
+        # Check if site and var combination exists in check_table
+        if dm.is_check_table_value(site, var):
+                    # Check if sensor list is empty
+            if not sensors:
+                row_vals.append('')
+                row_colors.append("red")  # Red for missing sensors
+                continue   
 
-         
-        if sensors:
             sensor_data = data_df[sensors]
             total = sensor_data.size
             nans = sensor_data.isna().sum().sum()

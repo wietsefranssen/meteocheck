@@ -72,7 +72,6 @@ class DataManager:
         self.check_table = pd.read_csv(self.check_table_filename, sep=';')
 
     def download_or_load_data(self):
-        # self.set_dates()
         self.load_check_table()
         download_data = check_if_download_data_needed(
             self.last_retrieval_info_file,
@@ -105,7 +104,29 @@ class DataManager:
 
     def get_data(self):
         return self.data_df, self.sensorinfo_df
+    
+    
+    def is_check_table_value(self, site_name, variable_name):
+        """
+        Returns the value in check_table for the given site_name (station) and variable_name.
+        Returns None if not found.
+        """
+        if self.check_table is None:
+            self.load_check_table()
+        # Find the row where 'station' == site_name
+        row = self.check_table[self.check_table['station'] == site_name]
+        if not row.empty and variable_name in self.check_table.columns[2:]:            
+            result = row.iloc[0][variable_name]
+            # Check if the result is not NaN or empty
+            if pd.notna(result) and result != '':
+                return True
+            else:
+                return False
+        # If not found or result is NaN/empty, return None
+        return None
 
+# Example usage:
+# value = dm.get_check_table_value('BLOOOO', 'TS01')
 # Usage in your main script:
 # from data_manager import DataManager
 # dm = DataManager()
