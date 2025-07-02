@@ -13,9 +13,40 @@ print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 dm.download_or_load_data()
 data_df, sensorinfo_df = dm.get_data()
 
-# Fix PAIR units for selected Stations
-# sel_names = ['GOB_44_MT', 'BUO_31_MT']
-# data_df = fix_pair_units(sensorinfo_df, data_df, sel_names)
+def find_incorrect_airpressure_sensors(sensorinfo_df, data_df, threshold=200):
+    """
+    Returns a list of sensor_ids where air pressure values are likely a factor 10 too low.
+    Also checks the unit in sensorinfo_df if available.
+    """
+    # Find air pressure sensors
+    airpressure_sensors = sensorinfo_df[sensorinfo_df['variable_name'].str.contains('PAIR')]['sensor_id']
+    incorrect_sensors = []
+    for sensor in airpressure_sensors:
+        if sensor in data_df:
+            vals = data_df[sensor].dropna()
+            # Check for low median or wrong unit
+            unit = sensorinfo_df[sensorinfo_df['sensor_id'] == sensor]['unit'].iloc[0] if 'unit' in sensorinfo_df.columns else 'hPa'
+            if (not vals.empty and vals.median() < threshold) or (unit not in ['hPa', 'hpa']):
+                incorrect_sensors.append(sensor)
+    return incorrect_sensors
+
+def correct_airpressure_units(data_df, sensorinfo_df, sensor_ids):
+    """
+    Multiplies the values of the given sensor_ids by 10 in data_df and updates the unit in sensorinfo_df.
+    """
+    for sensor in sensor_ids:
+        if sensor in data_df:
+            data_df[sensor] = data_df[sensor] * 10
+        if 'unit' in sensorinfo_df.columns:
+            sensorinfo_df.loc[sensorinfo_df['sensor_id'] == sensor, 'unit'] = 'hPa'
+    return data_df, sensorinfo_df
+
+# Detect and correct air pressure sensors with wrong units
+incorrect_sensors = find_incorrect_airpressure_sensors(sensorinfo_df, data_df)
+if incorrect_sensors:
+    print("Correcting air pressure sensors:", incorrect_sensors)
+    data_df, sensorinfo_df = correct_airpressure_units(data_df, sensorinfo_df, incorrect_sensors)
+
 
 # Prepare names
 check_table = dm.check_table
@@ -271,6 +302,7 @@ def update_highlight_graph(active_cell, show_outliers, outlier_method):
             ))
     fig.update_layout(title=f"{site} - {var}")
     return fig
+
 
 if __name__ == "__main__":
     app.run(debug=True)
