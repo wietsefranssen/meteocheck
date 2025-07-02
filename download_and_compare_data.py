@@ -43,23 +43,27 @@ for site in site_names:
     row_colors = []
     for var in var_names:
         sensors = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_id'].tolist()
-     
-        # Check if site and var combination exists in check_table
         if dm.is_check_table_value(site, var):
-                    # Check if sensor list is empty
             if not sensors:
                 row_vals.append('')
-                row_colors.append("red")  # Red for missing sensors
-                continue   
+                row_colors.append("red")
+                continue
 
             sensor_data = data_df[sensors]
-            total = sensor_data.size
-            nans = sensor_data.isna().sum().sum()
-            # # Determine if the data is in 30-minute intervals (has '_Avg' on sensorname_tmp)
-            # sensorname_tmp = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_name'].tolist()
-            # if any('_Avg' in name for name in sensorname_tmp):
-            #     nans = nans / 30 - 30 # Adjust total for 30-minute intervals
-            #     # total = total * 30
+            total = 0
+            nans = 0
+            for sensor in sensors:
+                series = data_df[sensor]
+                # Detect if this sensor is 30-min data
+                is_30min = series.dropna().index.minute.isin([0, 30]).all()
+                if is_30min:
+                    # Only count expected 30-min intervals
+                    expected = series.index[(series.index.minute == 0) | (series.index.minute == 30)]
+                    total += len(expected)
+                    nans += series.loc[expected].isna().sum()
+                else:
+                    total += series.size
+                    nans += series.isna().sum()
             if total > 0:
                 frac_nan = nans / total
                 row_vals.append(f"{frac_nan:.0%} NaN")
