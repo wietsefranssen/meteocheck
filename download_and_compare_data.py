@@ -6,8 +6,8 @@ import matplotlib.colors as mcolors
 import plotly.graph_objects as go
 
 dm = DataManager()
-dm.set_dates(days_back=4, offset=2)
-dm.set_dates(start_dt='2025-06-20', end_dt='2025-06-24 23:59:00')
+dm.set_dates(days_back=7, offset=1)
+dm.set_dates(start_dt='2025-07-03', end_dt='2025-07-10 23:58:00')
 print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
 dm.download_or_load_data()
@@ -135,6 +135,8 @@ datatable = dash_table.DataTable(
     style_data_conditional=style_data_conditional,
     style_cell={'textAlign': 'center'},
     style_header={'fontWeight': 'bold'},
+    # Enable multi cell selection
+    selected_cells=[],
 )
 
 # remove all sensor_ids from data_df which only contain NaN values
@@ -251,105 +253,73 @@ app.layout = html.Div([
 
 @app.callback(
     Output('highlight-graph', 'figure'),
-    [Input('nan-table', 'active_cell'),
+    [Input('nan-table', 'selected_cells'),
      Input('show-outliers', 'value'),
      Input('outlier-method', 'value')]
 )
-def update_highlight_graph(active_cell, show_outliers, outlier_method):
-    if active_cell is None or active_cell['column_id'] == 'Site Name':
-        return go.Figure()
-    row = active_cell['row']
-    col = active_cell['column_id']
-    site = site_names[row]
-    var = col
-    sensors = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_id'].tolist()
-    if not sensors:
-        return go.Figure()
-    # Select outlier mask
-    if outlier_method == 'iqr':
-        outlier_mask_used = iqr_outlier_mask
-    elif outlier_method == 'modz':
-        outlier_mask_used = modz_outlier_mask
-    elif outlier_method == 'percentile':
-        outlier_mask_used = percentile_outlier_mask
-    elif outlier_method == 'rolling':
-        outlier_mask_used = rolling_outlier_mask
-    else:
-        outlier_mask_used = zscore_outlier_mask
+def update_highlight_graph(selected_cells, show_outliers, outlier_method):
+    import plotly.graph_objects as go
     fig = go.Figure()
-    for sensor in sensors:
-        y = data_df[sensor].copy()
-        # Remove outliers if requested and this is ATMP
-        if var == 'ATMP' and sensor in atmp_data.columns and 'remove' in show_outliers:
-            y = y.mask(outlier_mask_used[sensor])
-        fig.add_trace(go.Scatter(
-            x=data_df.index,
-            y=y,
-            mode='lines+markers',
-            name=f"{sensorinfo_df[sensorinfo_df['sensor_id'] == sensor]['site_name'].iloc[0]} ({sensor})",
-            line=dict(width=1),
-            marker=dict(size=3)
-        ))
-        # Highlight outliers if this is an ATMP sensor and user wants to see them
-        if var == 'ATMP' and sensor in atmp_data.columns and 'show' in show_outliers:
-            outlier_idx = outlier_mask_used[sensor]
+    if not selected_cells:
+        return fig
+
+    print("Selected cells:", selected_cells)  # <-- Add this line
+
+    # Collect all (site, var) pairs from selected cells
+    pairs = []
+    for cell in selected_cells:
+        row = cell['row']
+        col = cell['column_id']
+        if col == 'Site Name':
+            continue
+        site = site_names[row]
+        var = col
+        pairs.append((site, var))
+
+    print("Pairs to plot:", pairs)  # <-- Add this line
+
+    # Plot all selected (site, var) pairs
+    for site, var in pairs:
+        sensors = sensorinfo_df[(sensorinfo_df['site_name'] == site) & (sensorinfo_df['variable_name'] == var)]['sensor_id'].tolist()
+        if not sensors:
+            continue
+        # Select outlier mask for this variable and method (update as needed)
+        mask = None
+        if var == 'ATMP':
+            if outlier_method == 'iqr':
+                mask = iqr_outlier_mask
+            elif outlier_method == 'modz':
+                mask = modz_outlier_mask
+            elif outlier_method == 'percentile':
+                mask = percentile_outlier_mask
+            elif outlier_method == 'rolling':
+                mask = rolling_outlier_mask
+            else:
+                mask = zscore_outlier_mask
+        for sensor in sensors:
+            y = data_df[sensor].copy()
+            if var == 'ATMP' and mask is not None and sensor in atmp_data.columns and 'remove' in show_outliers:
+                y = y.mask(mask[sensor])
             fig.add_trace(go.Scatter(
-                x=atmp_data.index[outlier_idx],
-                y=atmp_data[sensor][outlier_idx],
-                mode='markers',
-                marker=dict(color='red', size=12, symbol='x'),
-                name=f"{sensorinfo_df[sensorinfo_df['sensor_id'] == sensor]['site_name'].iloc[0]} Outlier"
+                x=data_df.index,
+                y=y,
+                mode='lines+markers',
+                name=f"{site} ({sensor})",
+                line=dict(width=1),
+                marker=dict(size=3)
             ))
-    fig.update_layout(title=f"{site} - {var}")
+            if var == 'ATMP' and mask is not None and sensor in atmp_data.columns and 'show' in show_outliers:
+                outlier_idx = mask[sensor]
+                fig.add_trace(go.Scatter(
+                    x=atmp_data.index[outlier_idx],
+                    y=atmp_data[sensor][outlier_idx],
+                    mode='markers',
+                    marker=dict(color='red', size=12, symbol='x'),
+                    name=f"{site} ({sensor}) Outlier"
+                ))
+    fig.update_layout(title="Selected sensors")
     return fig
 
 
 if __name__ == "__main__":
     app.run(debug=True)
-# @app.callback(
-#     Output('zoom-store', 'data'),
-#     [Input(f'graph-{i}', 'relayoutData') for i in range(nfigs)],
-#     State('zoom-store', 'data'),
-#     prevent_initial_call=True
-# )
-# def update_zoom_store(*args):
-#     relayout_datas = args[:-1]
-#     store = args[-1] or {}
-#     x_range = store.get('x_range')
-#     new_x_range = x_range
-
-#     # Use dash.callback_context (ctx) to find which graph triggered
-#     triggered = ctx.triggered_id
-#     if triggered is None:
-#         return dash.no_update
-
-#     # Extract the index from the triggered id
-#     if triggered.startswith('graph-'):
-#         idx = int(triggered.split('-')[1])
-#         relayout = relayout_datas[idx]
-#         if relayout:
-#             # Zoom in
-#             if 'xaxis.range[0]' in relayout and 'xaxis.range[1]' in relayout:
-#                 new_x_range = [relayout['xaxis.range[0]'], relayout['xaxis.range[1]']]
-#             elif 'xaxis' in relayout and 'range' in relayout['xaxis']:
-#                 new_x_range = relayout['xaxis']['range']
-#             # Double-click zoom out
-#             elif relayout.get('xaxis.autorange') is True:
-#                 new_x_range = None
-
-#     # Only update if the range actually changed
-#     if new_x_range != x_range:
-#         return {'x_range': new_x_range}
-#     else:
-#         return dash.no_update
-
-# @app.callback(
-#     [Output(f'graph-{i}', 'figure') for i in range(nfigs)],
-#     Input('zoom-store', 'data')
-# )
-# def update_graphs(zoom_data):
-#     x_range = zoom_data.get('x_range') if zoom_data else None
-#     return [make_figure(data_df, sensorinfo_df, sensor_groups, sensor_names[i], x_range) for i in range(nfigs)]
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
