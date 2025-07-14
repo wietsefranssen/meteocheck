@@ -41,7 +41,22 @@ class DataManager:
             offset=offset,
             tz=tz
         )
-
+        
+    def set_meta_path(self, path):
+        self.meta_path = path
+        self.check_table_filename = os.path.join(path, 'check_table_base.csv')
+        self.variable_info_file = os.path.join(path, 'variables.csv')
+        
+    def set_data_path(self, path):
+        self.data_path = path
+        self.data_df_file = os.path.join(path, 'data.pkl')
+        self.sensorinfo_df_file = os.path.join(path, 'sensorinfo.pkl')
+        
+    def set_temp_path(self, path):
+        self.temp_path = path
+        self.last_retrieval_info_file = os.path.join(path, 'last_run_config.txt')
+        self.last_retrieval_checktable_file = os.path.join(path, 'check_table.txt')
+        
     def set_dates(self, start_dt=None, end_dt=None, days_back=7, offset=2, tz='UTC'):
         """
         Set start and end dates as timezone-aware datetimes.

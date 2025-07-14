@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 dm = DataManager()
 dm.set_dates(days_back=7, offset=1)
-dm.set_dates(start_dt='2025-07-03', end_dt='2025-07-10 23:58:00')
+# dm.set_dates(start_dt='2025-07-03', end_dt='2025-07-10 23:58:00')
 print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
 dm.download_or_load_data()
@@ -321,5 +321,5 @@ def update_highlight_graph(selected_cells, show_outliers, outlier_method):
     return fig
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# if __name__ == "__main__":
+#     app.run(debug=True)
