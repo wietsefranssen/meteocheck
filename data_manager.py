@@ -49,11 +49,17 @@ class DataManager:
         
     def set_data_path(self, path):
         self.data_path = path
+        # if path does not exist, create it
+        if not os.path.exists(path):
+            os.makedirs(path)
         self.data_df_file = os.path.join(path, 'data.pkl')
         self.sensorinfo_df_file = os.path.join(path, 'sensorinfo.pkl')
         
     def set_temp_path(self, path):
         self.temp_path = path
+        # if path does not exist, create it
+        if not os.path.exists(path):
+            os.makedirs(path)
         self.last_retrieval_info_file = os.path.join(path, 'last_run_config.txt')
         self.last_retrieval_checktable_file = os.path.join(path, 'check_table.txt')
         
