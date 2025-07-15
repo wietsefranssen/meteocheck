@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import polars as pl
 from src.general import fix_start_end_dt
 from src.db import get_data_from_db
 from src.last_retrieval import (
@@ -23,8 +24,8 @@ class DataManager:
         self.data_path = data_path
         self.meta_path = meta_path
         self.temp_path = temp_path
-        self.data_df_file = os.path.join(data_path, 'data.pkl')
-        self.sensorinfo_df_file = os.path.join(data_path, 'sensorinfo.pkl')
+        self.data_df_file = os.path.join(data_path, 'data.parquet')
+        self.sensorinfo_df_file = os.path.join(data_path, 'sensorinfo.parquet')
         self.check_table_filename = os.path.join(meta_path, 'check_table_base.csv')
         self.variable_info_file = os.path.join(meta_path, 'variables.csv')
         self.last_retrieval_info_file = os.path.join(temp_path, 'last_run_config.txt')
@@ -49,15 +50,14 @@ class DataManager:
         
     def set_data_path(self, path):
         self.data_path = path
-        # if path does not exist, create it
         if not os.path.exists(path):
             os.makedirs(path)
-        self.data_df_file = os.path.join(path, 'data.pkl')
-        self.sensorinfo_df_file = os.path.join(path, 'sensorinfo.pkl')
+
+        self.data_df_file = os.path.join(path, 'data.parquet')
+        self.sensorinfo_df_file = os.path.join(path, 'sensorinfo.parquet')
         
     def set_temp_path(self, path):
         self.temp_path = path
-        # if path does not exist, create it
         if not os.path.exists(path):
             os.makedirs(path)
         self.last_retrieval_info_file = os.path.join(path, 'last_run_config.txt')
@@ -109,12 +109,26 @@ class DataManager:
                 end_dt=self.end_dt,
                 check_table_filename=self.check_table_filename
             )
-            self.data_df.to_pickle(self.data_df_file)
-            self.sensorinfo_df.to_pickle(self.sensorinfo_df_file)
+            # Save as Polars parquet files
+            if self.data_df is not None and self.data_df.height > 0:
+                self.data_df.write_parquet(self.data_df_file)
+            if self.sensorinfo_df is not None and self.sensorinfo_df.height > 0:
+                self.sensorinfo_df.write_parquet(self.sensorinfo_df_file)
         else:
-            self.data_df = pd.read_pickle(self.data_df_file)
-            self.sensorinfo_df = pd.read_pickle(self.sensorinfo_df_file)
-        self.sensorinfo_df = add_extra_info_to_sensorinfo(self.sensorinfo_df, self.variable_info_file)
+            # Load as Polars DataFrames
+            if os.path.exists(self.data_df_file):
+                self.data_df = pl.read_parquet(self.data_df_file)
+            else:
+                self.data_df = pl.DataFrame()
+            if os.path.exists(self.sensorinfo_df_file):
+                self.sensorinfo_df = pl.read_parquet(self.sensorinfo_df_file)
+            else:
+                self.sensorinfo_df = pl.DataFrame()
+                
+        # Convert sensorinfo_df to pandas for add_extra_info_to_sensorinfo function
+        if self.sensorinfo_df is not None and self.sensorinfo_df.height > 0:
+            self.sensorinfo_df = add_extra_info_to_sensorinfo(self.sensorinfo_df, self.variable_info_file)
+        
         save_last_retrieval_info(
             self.check_table,
             self.start_dt,
@@ -125,7 +139,6 @@ class DataManager:
 
     def get_data(self):
         return self.data_df, self.sensorinfo_df
-    
     
     def is_check_table_value(self, site_name, variable_name):
         """
@@ -145,11 +158,3 @@ class DataManager:
                 return False
         # If not found or result is NaN/empty, return None
         return None
-
-# Example usage:
-# value = dm.get_check_table_value('BLOOOO', 'TS01')
-# Usage in your main script:
-# from data_manager import DataManager
-# dm = DataManager()
-# dm.download_or_load_data()
-# data_df, sensorinfo_df = dm.get_data()

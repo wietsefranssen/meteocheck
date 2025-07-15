@@ -1,10 +1,6 @@
 from get_dbstring import get_dbstring
 from config import load_config
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import pandas as pd
-import numpy as np
-import os
+
 from datetime import datetime
 from src.general import get_check_table
 import polars as pl
@@ -32,48 +28,12 @@ def run_pg_query(query: str, config_file='database.ini', config_section='postgre
         # Execute the query
         df = pl.read_database(query, connection=engine, **kwargs)
 
-        # convert from polar to pandas DataFrame keep column names
-        df = df.to_pandas()    
-
-        print("Query executed successfully")
-
         return df
 
     except Exception as error:
         print(f"Error: {error}")
         return pl.DataFrame()
     
-def run_pg_queryx(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
-    """
-    Run a query on the PostgreSQL database and return the results.
-    
-    Parameters:
-    - query: SQL query string to execute.
-    - params: Optional parameters for the query.
-    
-    Returns:
-    - List of rows returned by the query.
-    """
-    config = load_config(filename=config_file, section=config_section)
-    
-    conn = None
-    try:
-        with psycopg2.connect(**config) as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, params)
-                rows = cur.fetchall()
-                df = pd.DataFrame(rows)
-                
-                return df
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-        return None
-
-    finally:
-        if conn is not None:
-            conn.close()
-
 def get_data_from_db(start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
     """
     Function to retrieve data from the WUR and VU databases.
@@ -83,61 +43,60 @@ def get_data_from_db(start_dt=None, end_dt=None, check_table_filename='check_tab
     check_table = get_check_table(filename=check_table_filename)
 
     # initialize sensorinfo_df_vu and data_df_vu
-    sensorinfo_df_vu = pd.DataFrame()
-    data_df_vu = pd.DataFrame()
-    sensorinfo_df_wur = pd.DataFrame()
-    data_df_wur = pd.DataFrame()
+    sensorinfo_df_vu = pl.DataFrame()
+    data_df_vu = pl.DataFrame()
+    sensorinfo_df_wur = pl.DataFrame()
+    data_df_wur = pl.DataFrame()
     
     # Get data from the database
     sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
-
+    
     # Get data from the database
     sensorinfo_df_vu, data_df_vu = get_data(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt, source='vu_db')
 
     # Check if data_df_wur and data_df_vu are None or empty
-    if data_df_wur is None or data_df_wur.empty:
+    if data_df_wur is None or data_df_wur.height == 0:
         print("No data found for WUR database.")
-        data_df_wur = pd.DataFrame()
-    if data_df_vu is None or data_df_vu.empty:      
+        data_df_wur = pl.DataFrame()
+    if data_df_vu is None or data_df_vu.height == 0:      
         print("No data found for VU database.")
-        data_df_vu = pd.DataFrame()
-    # Combine the two DataFrames
-    data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
+        data_df_vu = pl.DataFrame()
 
+    # Combine the two DataFrames using Polars join
+    if data_df_wur.height > 0 and data_df_vu.height > 0:
+        # Join on datetime column
+        data_df = data_df_wur.join(data_df_vu, on='datetime', how='outer')
+    elif data_df_wur.height > 0:
+        data_df = data_df_wur
+    elif data_df_vu.height > 0:
+        data_df = data_df_vu
+    else:
+        data_df = pl.DataFrame()
+    
     # Check if sensorinfo_df_wur and sensorinfo_df_vu are None or empty
-    if sensorinfo_df_wur is None or sensorinfo_df_wur.empty:
+    if sensorinfo_df_wur is None or sensorinfo_df_wur.height == 0:
         print("No sensor information found for WUR database.")
-        sensorinfo_df_wur = pd.DataFrame()
-    if sensorinfo_df_vu is None or sensorinfo_df_vu.empty:
+        sensorinfo_df_wur = pl.DataFrame()
+    if sensorinfo_df_vu is None or sensorinfo_df_vu.height == 0:
         print("No sensor information found for VU database.")
-        sensorinfo_df_vu = pd.DataFrame()
+        sensorinfo_df_vu = pl.DataFrame()
 
-    # Combine the two sensor_info DataFrames
-    sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
-    
-    return sensorinfo_df, data_df            
+    # Combine the two sensor_info DataFrames using Polars concat
+    if sensorinfo_df_wur.height > 0 and sensorinfo_df_vu.height > 0:
+        # Find overlapping columns
+        common_cols = list(set(sensorinfo_df_wur.columns) & set(sensorinfo_df_vu.columns))
+        # Select only common columns from both DataFrames
+        sensorinfo_df_wur_aligned = sensorinfo_df_wur.select(common_cols)
+        sensorinfo_df_vu_aligned = sensorinfo_df_vu.select(common_cols)
+        sensorinfo_df = pl.concat([sensorinfo_df_wur_aligned, sensorinfo_df_vu_aligned])
+    elif sensorinfo_df_wur.height > 0:
+        sensorinfo_df = sensorinfo_df_wur
+    elif sensorinfo_df_vu.height > 0:
+        sensorinfo_df = sensorinfo_df_vu
+    else:
+        sensorinfo_df = pl.DataFrame()
 
-def get_data_from_db2(start_dt=None, end_dt=None, check_table_filename='check_table.csv'):
-    """
-    Function to retrieve data from the WUR and VU databases.
-    """
-    
-    # Get the variables_table
-    check_table = get_check_table(filename=check_table_filename)
-
-    # Get data from the database
-    sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
-
-    # Get data from the database
-    sensorinfo_df_vu, data_df_vu = get_data(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt, source='vu_db')
-
-    # Combine the two DataFrames
-    data_df = pd.concat([data_df_wur, data_df_vu], axis=1)
-
-    # Combine the two sensor_info DataFrames
-    sensorinfo_df = pd.concat([sensorinfo_df_wur, sensorinfo_df_vu], ignore_index=True)
-    
-    return sensorinfo_df, data_df            
+    return sensorinfo_df, data_df
 
 def get_sensorinfo_wur(shortname):
     
@@ -164,7 +123,7 @@ def get_siteids_vu(shortname):
     """
   
     result = run_pg_query(query, config_section='postgresql_vu')
-
+    
     return result
 
 def get_sensor_units_vu(shortname):
@@ -195,16 +154,19 @@ def get_sensorinfo_siteid_name_combo_vu(siteid_names_combo):
     """
                 
     sensor_info = run_pg_query(query, config_section='postgresql_vu')
-    
+
     # get vector of unit_ids from result
     unit_ids = sensor_info['unit_id'].to_list()
 
     # Get sensor units
     sensor_units = get_sensor_units_vu(unit_ids)  
-
-    # Add 'unit' from sensor_units to sensor_info by mapping unit_id from sensor_info to unit_id from sensor_units
-    unit_mapping = dict(zip(sensor_units['unit_id'], sensor_units['unit']))
-    sensor_info['unit'] = sensor_info['unit_id'].map(unit_mapping)
+    
+    # Add 'unit' from sensor_units to sensor_info using Polars join
+    sensor_info = sensor_info.join(
+        sensor_units,
+        on='unit_id',
+        how='left'
+    )
 
     return sensor_info
 
@@ -235,7 +197,7 @@ def get_data_vudb(sensorid, start_dt, end_dt, limit=None):
         """
 
     result = run_pg_query(query, config_section='postgresql_vu')
- 
+
     return result
 
 def get_data_wurdb(sensorid, start_dt, end_dt, limit=None):
@@ -265,7 +227,7 @@ def get_data_wurdb(sensorid, start_dt, end_dt, limit=None):
         """
 
     result = run_pg_query(query, config_section='postgresql_wur')
-    
+
     return result
        
 def get_sensorinfo_by_site_and_varname_vu(check_table):
@@ -275,31 +237,61 @@ def get_sensorinfo_by_site_and_varname_vu(check_table):
     
     # Get the siteid and siteid_name from the database
     siteid_name = get_siteids_vu(sites)
-        
-    # Match the 'Station' in check_table with the 'name' in siteid_name2 and add a new column 'siteid' to check_table with matched site_id values 
-    mapping = dict(zip(siteid_name['name'], siteid_name['site_id']))
-    check_table = check_table.copy()
-    check_table.loc[:, 'siteid'] = check_table['Station'].map(mapping)
-
-    # Conert NaN values in the siteid column to -9999 and make in integer
-    check_table.loc[:, 'siteid'] = check_table['siteid'].fillna(-9999).astype(int)
     
-    # siteid and Variable columns from check_table
-    siteid_varname = check_table[['siteid', 'Variable']].drop_duplicates()
+    # Convert check_table to Polars if it's pandas
+    if hasattr(check_table, 'index'):  # It's pandas
+        check_table_pl = pl.from_pandas(check_table)
+    else:
+        check_table_pl = check_table
     
-    # make a list of tuples (siteid, varname) from siteid_varname
-    siteid_varname = [tuple(x) for x in siteid_varname.to_numpy()]
+    # Create mapping for site_id using join
+    check_table_with_siteid = check_table_pl.join(
+        siteid_name,
+        left_on='Station',
+        right_on='name',
+        how='left'
+    ).with_columns([
+        pl.col('site_id').fill_null(-9999).cast(pl.Int64).alias('siteid')
+    ])
     
-    sensor_info = get_sensorinfo_siteid_name_combo_vu(siteid_varname)
-        
-    # add a sitename column to sensor_info by using siteid_name2 as mapping
-    sensor_info['site_name'] = sensor_info['site_id'].map(dict(zip(siteid_name['site_id'], siteid_name['name'])))
+    # Get unique siteid and Variable combinations
+    siteid_varname = check_table_with_siteid.select(['siteid', 'Variable']).unique()
     
-    # add a variable_name column to sensor_info by using check_table as mapping
-    sensor_info['variable_name'] = sensor_info['sensor_name'].map(dict(zip(check_table['Variable'], check_table['Variable_name'])))
+    # Convert to list of tuples for the database query
+    siteid_varname_tuples = [
+        (row['siteid'], row['Variable']) 
+        for row in siteid_varname.to_dicts()
+    ]
     
-    # add a source column to sensor_info
-    sensor_info['source'] = 'vu_db'
+    sensor_info = get_sensorinfo_siteid_name_combo_vu(siteid_varname_tuples)
+    
+    if sensor_info is None or sensor_info.height == 0:
+        return pl.DataFrame()
+    
+    # Add site_name using join
+    sensor_info = sensor_info.join(
+        siteid_name.select(['site_id', 'name']).rename({'name': 'site_name'}),
+        on='site_id',
+        how='left'
+    )
+    
+    # Add variable_name using join
+    variable_mapping = check_table_pl.select(['Variable', 'Variable_name']).unique()
+    sensor_info = sensor_info.join(
+        variable_mapping,
+        left_on='sensor_name',
+        right_on='Variable',
+        how='left'
+    ).rename({'Variable_name': 'variable_name'})
+    
+    # Drop the extra 'Variable' column if it exists
+    if 'Variable' in sensor_info.columns:
+        sensor_info = sensor_info.drop('Variable')
+    
+    # Add source column
+    sensor_info = sensor_info.with_columns([
+        pl.lit('vu_db').alias('source')
+    ])
         
     return sensor_info
 
@@ -310,31 +302,55 @@ def get_sensorinfo_by_site_and_varname_wur(check_table):
     
     # Get the siteid and siteid_name from the database
     sensor_info = get_sensorinfo_wur(sites)
+    # sensor_info = sensor_info.to_pandas()
     
-    if sensor_info is None or sensor_info.empty:
+    if sensor_info is None or sensor_info.height == 0:
         print("No sensor information found for the specified sites.")
         return None
     
-    # Only keep the rows where the sensor_name is in the check_table
-    sensor_info = sensor_info[sensor_info['sensor_name'].isin(check_table['Variable'].tolist())] 
+    # Only keep the rows where the sensor_name is in the check_table    
+    # Convert to Polars syntax
+    variables_list = check_table['Variable'].tolist()
+    sensor_info = sensor_info.filter(
+        pl.col('sensor_name').is_in(variables_list)
+    )
 
     # Add Variable_name column from check_table to sensor_info by matching the sensor_name with the Variable column in check_table
-    for i, row in sensor_info.iterrows():
-        varname = check_table.loc[check_table['Variable'] == row['sensor_name'], 'Variable_name'].values
-        if len(varname) > 0:
-            sensor_info.loc[i, 'variable_name'] = varname[0]
-        else:
-            sensor_info.loc[i, 'variable_name'] = None
+    # Convert check_table to polars for easier joining
+    check_table_pl = pl.from_pandas(check_table) if hasattr(check_table, 'index') else check_table
+    
+    # Create mapping using Polars join
+    variable_mapping = check_table_pl.select(['Variable', 'Variable_name']).unique()
+    
+    # Join sensor_info with variable_mapping
+    sensor_info = sensor_info.join(
+        variable_mapping,
+        left_on='sensor_name',
+        right_on='Variable',
+        how='left'
+    ).rename({'Variable_name': 'variable_name'})
+    
+    # Drop the extra 'Variable' column if it exists
+    if 'Variable' in sensor_info.columns:
+        sensor_info = sensor_info.drop('Variable')
 
-    # Add source column to sensor_info
-    sensor_info['source'] = 'wur_db'
+    # Add source column to sensor_info using Polars
+    sensor_info = sensor_info.with_columns([
+        pl.lit('wur_db').alias('source')
+    ])
   
     return sensor_info
 
 def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
     
+    # Convert check_table to polars if it's pandas
+    if hasattr(check_table, 'to_pandas'):
+        check_table_pl = check_table
+    else:
+        check_table_pl = pl.from_pandas(check_table)
+    
     # Check if check_table is None or empty
-    if check_table is None or check_table.empty:
+    if check_table_pl is None or check_table_pl.height == 0:
         return None, None
     
     # Get the sensor_info by site and varname combination
@@ -344,19 +360,13 @@ def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
         sensorinfo_df = get_sensorinfo_by_site_and_varname_wur(check_table)
     else:
         raise ValueError(f"Unknown source: {source}. Supported sources are 'vu_db' and 'wur_db'.")
-        
+    
     # Check if sensorinfo_df is None or empty
-    if sensorinfo_df is None or sensorinfo_df.empty:
+    if sensorinfo_df is None or sensorinfo_df.height == 0:
         return None, None
     
-    # Check if all items od check_table are in sensorinfo_df
-    missing_items = check_table[~check_table.set_index(['Station', 'Variable']).index.isin(sensorinfo_df.set_index(['site_name', 'sensor_name']).index)]
-    if not missing_items.empty:
-        print("The following items in the check_table are not found in the sensor_info:")
-        print(missing_items[['Station', 'Variable']])
-
     # Get the sensor_ids from sensorinfo_df
-    sensorids = sensorinfo_df['sensor_id'].tolist()
+    sensorids = sensorinfo_df['sensor_id'].to_list()
     
     # Get the sensor data from the database
     if source == 'vu_db':
@@ -365,41 +375,36 @@ def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
         data = get_data_wurdb(sensorids, start_dt, end_dt, limit=limit)
     else:
         raise ValueError(f"Unknown source: {source}. Supported sources are 'vu_db' and 'wur_db'.")
-    
-    
-    
-    
+
     # Check if data is None or empty
-    if data is None or data.empty:
+    if data is None or data.height == 0:
         print(f"No data found for period {start_dt} - {end_dt}")
-        return sensorinfo_df, pd.DataFrame()
+        return sensorinfo_df, pl.DataFrame()
 
     # Remove duplicates based on 'dt' and 'logicid' to ensure unique entries
-    data_nodup = data.drop_duplicates(subset=['dt', 'logicid'])
+    data_nodup = data.unique(subset=['dt', 'logicid'])
+    
+    # Pivot the DataFrame using Polars
     data_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
 
-    # Pivot the DataFrame
-    data_df = data_nodup.pivot(index='dt', columns='logicid', values='value')
-
-    # Add columns that are not in the data_df but are in the sensor_info
-    missing_cols = set(sensorinfo_df['sensor_id']) - set(data_df.columns)
+    # Sort the columns based on dt
+    data_df = data_df.sort('dt')
+    
+    # Get existing columns (excluding 'dt')
+    existing_cols = set(data_df.columns) - {'dt'}
+    missing_cols = set(str(sid) for sid in sensorids) - existing_cols
+    
+    # Add missing columns with null values
     for col in missing_cols:
-        data_df = data_df.copy()  # Make a copy to avoid SettingWithCopyWarning
-        data_df[col] = np.nan
+        data_df = data_df.with_columns([
+            pl.lit(None, dtype=pl.Float64).alias(col)
+        ])
 
-    # Put the columns in the same order as in sensor_info
-    data_df = data_df[sensorids]
+    # Reorder columns to match sensorids order (add 'dt' first)
+    column_order = ['dt'] + [str(sid) for sid in sensorids if str(sid) in data_df.columns]
+    data_df = data_df.select(column_order)
 
-    # Reset the column names (optional, to remove the MultiIndex)
-    data_df.columns.name = None
+    # Rename 'dt' column to 'datetime'
+    data_df = data_df.rename({'dt': 'datetime'})
     
-    # Make index of data_df into a column
-    data_df.reset_index(inplace=True)
-    
-    # Rename the first column to 'datetime'
-    data_df.rename(columns={data_df.columns[0]: 'datetime'}, inplace=True)
-
-    # Set the 'datetime' column as the index
-    data_df.set_index('datetime', inplace=True)
-
     return sensorinfo_df, data_df

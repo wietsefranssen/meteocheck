@@ -1,8 +1,9 @@
 import os
 import pandas as pd
+import polars as pl
+from datetime import datetime
 
 def check_dates_last_retrieval(lastrun_info_file, start_dt, end_dt):
-
     # Read start and end dates from the text file
     if os.path.exists(lastrun_info_file):
         with open(lastrun_info_file, 'r') as f:
@@ -29,7 +30,15 @@ def check_checktable_last_retrieval(check_table_file, check_table):
     if os.path.exists(check_table_file):
         print(f"Check table file found: {check_table_file}")
         # Read check_table from the text file and compare it with the original check_table
-        check_table_retrieved = pd.read_csv(check_table_file, sep=r'\s+')
+        try:
+            check_table_retrieved = pd.read_csv(check_table_file, sep=r'\s+')
+        except:
+            # Try with different separators if whitespace doesn't work
+            try:
+                check_table_retrieved = pd.read_csv(check_table_file, sep='\t')
+            except:
+                check_table_retrieved = pd.read_csv(check_table_file)
+        
         # Compare the retrieved check_table with the original check_table
         if check_table.equals(check_table_retrieved):
             print("Check table retrieved successfully and matches the original check table.")
@@ -60,10 +69,22 @@ def check_if_download_data_needed(last_retrieval_info_file, start_dt, end_dt, la
     
 # Add extra info to sensorinfo_df
 def add_extra_info_to_sensorinfo(sensorinfo_df, variable_info_file):
-    # Read variable.csv file
-    variable_df = pd.read_csv(variable_info_file, sep=';')
-    # Map variable from variable_df to variable_name in sensorinfo_df and add the long_name from variable_df to sensorinfo_df
-    sensorinfo_df['long_name'] = sensorinfo_df['variable_name'].map(variable_df.set_index('variable')['long_name'])
+    """
+    Add extra info to sensorinfo_df. Works with both Pandas and Polars DataFrames.
+    """
+    # Handle Polars DataFrame
+    variable_df = pl.read_csv(variable_info_file, separator=';')
+    
+    # Create mapping dictionary from variable_df
+    variable_mapping = dict(zip(variable_df['variable'], variable_df['long_name']))
+    
+    # Map variable from variable_df to variable_name in sensorinfo_df and add the long_name
+    sensorinfo_df = sensorinfo_df.with_columns([
+        pl.col('variable_name').map_elements(
+            lambda x: variable_mapping.get(x, None),
+            return_dtype=pl.Utf8
+        ).alias('long_name')
+    ])
 
     return sensorinfo_df
   
@@ -91,5 +112,10 @@ def save_last_retrieval_info(check_table, start_dt, end_dt, last_retrieval_info_
         f.write(f"End date: {end_dt}\n")
         
     # Save the check_table to a text file
+    # Handle both Pandas and Polars DataFrames
     with open(last_retrieval_checktable_file, 'w') as f:
-        f.write(check_table.to_string(index=False))
+        if hasattr(check_table, 'height'):  # It's Polars
+            # Convert to string representation
+            f.write(str(check_table))
+        else:  # It's Pandas
+            f.write(check_table.to_string(index=False))
