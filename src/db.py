@@ -7,8 +7,43 @@ import numpy as np
 import os
 from datetime import datetime
 from src.general import get_check_table
+import polars as pl
+from sqlalchemy import create_engine, Engine
+from urllib.parse import quote  
 
-def run_pg_query(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
+def get_engine(config: dict, config_file='database.ini', config_section='postgresql_wur') -> Engine:
+    config = load_config(filename='database.ini', section=config_section)
+
+    """Create a SQLAlchemy engine."""
+    # db_url = f"postgresql://{configg['user']}:{configg['password']}@{configg['host']}:{configg['port']}/{configg['database']}"
+    db_url = f"postgresql://{config['user']}:%s@{config['host']}:{config['port']}/{config['database']}"
+    engine = create_engine(db_url % quote(config['password']))
+    # engine = create_engine(db_url)
+    return engine
+
+def run_pg_query(query: str, config_file='database.ini', config_section='postgresql_wur',params=None, **kwargs) -> pl.DataFrame:
+    """Execute a SQL query and read the results using polars."""
+    try:
+        config = load_config(filename=config_file, section=config_section)
+
+        # Create a SQLAlchemy engine
+        engine = get_engine(config=config, config_section=config_section)
+
+        # Execute the query
+        df = pl.read_database(query, connection=engine, **kwargs)
+
+        # convert from polar to pandas DataFrame keep column names
+        df = df.to_pandas()    
+
+        print("Query executed successfully")
+
+        return df
+
+    except Exception as error:
+        print(f"Error: {error}")
+        return pl.DataFrame()
+    
+def run_pg_queryx(query, params=None, config_file='database.ini', config_section='postgresql_wur'):
     """
     Run a query on the PostgreSQL database and return the results.
     
@@ -188,17 +223,18 @@ def get_data_vudb(sensorid, start_dt, end_dt, limit=None):
         SELECT dt, logicid, value
         FROM cdr.pointdata
         WHERE logicid IN ({sensorid_db_string})
-        AND dt BETWEEN %s AND %s
+        AND dt BETWEEN '{start_dt}' AND '{end_dt}'
         """
     else:
         query = f"""
         SELECT dt, logicid, value
         FROM cdr.pointdata
         WHERE logicid IN ({sensorid_db_string})
-        AND dt BETWEEN %s AND %s
+        AND dt BETWEEN '{start_dt}' AND '{end_dt}'
         LIMIT {limit}
         """
-    result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_vu')
+
+    result = run_pg_query(query, config_section='postgresql_vu')
  
     return result
 
@@ -217,19 +253,18 @@ def get_data_wurdb(sensorid, start_dt, end_dt, limit=None):
         SELECT time AS dt, sensor_id AS logicid, value
         FROM sensor_data
         WHERE sensor_id IN ({sensorid_db_string})
-        AND time BETWEEN %s AND %s
+        AND time BETWEEN '{start_dt}' AND '{end_dt}'
         """
     else:
         query = f"""
         SELECT time AS dt, sensor_id AS logicid, value
         FROM sensor_data
         WHERE sensor_id IN ({sensorid_db_string})
-        AND time BETWEEN %s AND %s
+        AND time BETWEEN '{start_dt}' AND '{end_dt}'
         LIMIT {limit}
         """
-        
 
-    result = run_pg_query(query, params=(start_dt, end_dt), config_section='postgresql_wur')
+    result = run_pg_query(query, config_section='postgresql_wur')
     
     return result
        
