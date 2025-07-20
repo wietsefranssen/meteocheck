@@ -3,7 +3,7 @@ import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
 from src.plot import make_figure  
 from src.corrections import find_incorrect_airpressure_sensors, correct_airpressure_units 
-from src.table import get_cell_values_and_colors
+from src.table import get_cell_values_and_colors, get_datatable
 from data_manager import DataManager
 import plotly.graph_objects as go
 import polars as pl
@@ -11,7 +11,6 @@ import numpy as np
 import os
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
-import dash_ag_grid as dag
 
 
 def download_and_compare_data(application='standalone'):
@@ -49,85 +48,11 @@ def download_and_compare_data(application='standalone'):
     var_names = check_table.columns[2:].tolist()
     site_names = check_table['station'].unique().tolist()
     site_names.sort()
-
     
     # Get cell values and colors
     cell_values, cell_colors = get_cell_values_and_colors(dm, sensorinfo_df, data_df, site_names, var_names)
-    
-    # Prepare DataTable data and styles
-    table_data = []
-    for i, site in enumerate(site_names):
-        row = {'Site Name': site}
-        for j, var in enumerate(var_names):
-            row[var] = cell_values[i][j]
-        table_data.append(row)
 
-    style_data_conditional = []
-    for i, site in enumerate(site_names):
-        for j, var in enumerate(var_names):
-            color = cell_colors[i][j]
-            style_data_conditional.append({
-                'if': {'row_index': i, 'column_id': var},
-                'backgroundColor': color
-            })
-
-    # Prepare AG Grid data - convert to list of dictionaries
-    ag_grid_data = []
-    for i, site in enumerate(site_names):
-        row = {'Site Name': site}
-        for j, var in enumerate(var_names):
-            row[var] = cell_values[i][j]
-        ag_grid_data.append(row)
-
-    # Create column definitions for AG Grid
-    columnDefs = [
-        {
-            "headerName": "Site Name",
-            "field": "Site Name",
-            "pinned": "left",
-            "width": 150,
-            "cellStyle": {"fontWeight": "bold"}
-        }
-    ]
-
-    # Add variable columns with conditional styling
-    for var in var_names:
-        columnDefs.append({
-            "headerName": var,
-            "field": var,
-            "width": 120,
-            "cellStyle": {
-                "function": f"""
-                function(params) {{
-                    const siteIndex = {site_names}.indexOf(params.data['Site Name']);
-                    const varIndex = {var_names}.indexOf('{var}');
-                    if (siteIndex >= 0 && varIndex >= 0) {{
-                        const colors = {cell_colors};
-                        return {{backgroundColor: colors[siteIndex][varIndex]}};
-                    }}
-                    return {{}};
-                }}
-                """
-            }
-        })
-
-    # Create the AG Grid component
-    datatable = html.Div([
-        dag.AgGrid(
-            id='nan-table',
-            columnDefs=columnDefs,
-            rowData=ag_grid_data,
-            className="ag-theme-alpine-dark",  # Use dark theme
-            dashGridOptions={
-                "rowSelection": "multiple",
-                "suppressRowClickSelection": False,
-                "domLayout": "autoHeight",
-                "headerHeight": 40,
-                "rowHeight": 35,
-            },
-            style={"height": "auto", "width": "100%"}
-        )
-    ], className="ag-grid-container", style={"margin": "20px 0"})
+    datatable = get_datatable(cell_values, cell_colors, site_names, var_names)
 
     # Remove all sensor_ids from data_df which only contain NaN values
     # Convert to pandas for dropna operation, then back to polars
