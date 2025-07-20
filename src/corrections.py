@@ -1,3 +1,5 @@
+import polars as pl
+
 ### Fix PAIR units for selected Stations ###
 # The PAIR variable is in mbar, but we want it in Pa for consistency with other variables.
 # The conversion is done by multiplying the values by 10.
@@ -38,4 +40,54 @@ sel_names = ['GOB_44_MT', 'BUO_31_MT', 'BUW_32_MT', 'HOH_33_MT', 'HOC_34_MT', 'L
 sel_names = ['PPA_42_MT', 'BRO_43_MT', 'MOB_42_MT', 'CAM_21_MT', 'ONL_22_MT']
 # sel_names = ['ZEG_PT', 'ZEG_RF', 'ALB_RF',
 #  'LAW_MS']
+
+def correct_airpressure_units(data_df, sensorinfo_df, sensor_ids):
+    """
+    Multiplies the values of the given sensor_ids by 10 in data_df and updates the unit in sensorinfo_df.
+    """
+    for sensor in sensor_ids:
+        sensor_str = str(sensor)
+        if sensor_str in data_df.columns:
+            # Update data_df using Polars
+            data_df = data_df.with_columns([
+                (pl.col(sensor_str) * 10).alias(sensor_str)
+            ])
+        
+        if 'unit' in sensorinfo_df.columns:
+            # Update sensorinfo_df using Polars
+            sensorinfo_df = sensorinfo_df.with_columns([
+                pl.when(pl.col('sensor_id') == sensor)
+                .then(pl.lit('hPa'))
+                .otherwise(pl.col('unit'))
+                .alias('unit')
+            ])
+    return data_df, sensorinfo_df
+
+def find_incorrect_airpressure_sensors(sensorinfo_df, data_df, threshold=200):
+    """
+    Returns a list of sensor_ids where air pressure values are likely a factor 10 too low.
+    Also checks the unit in sensorinfo_df if available.
+    """
+    # Find air pressure sensors using Polars
+    airpressure_sensors = sensorinfo_df.filter(
+        pl.col('variable_name').str.contains('PAIR')
+    )['sensor_id'].to_list()
+    
+    incorrect_sensors = []
+    for sensor in airpressure_sensors:
+        sensor_str = str(sensor)
+        if sensor_str in data_df.columns:
+            # Get values using Polars
+            vals = data_df.select(sensor_str).to_series().drop_nulls()
+            
+            # Check for low median or wrong unit
+            sensor_info = sensorinfo_df.filter(pl.col('sensor_id') == sensor)
+            if sensor_info.height > 0 and 'unit' in sensorinfo_df.columns:
+                unit = sensor_info['unit'].item()
+            else:
+                unit = 'hPa'
+                
+            if (vals.len() > 0 and vals.median() < threshold) or (unit not in ['hPa', 'hpa']):
+                incorrect_sensors.append(sensor)
+    return incorrect_sensors
 
