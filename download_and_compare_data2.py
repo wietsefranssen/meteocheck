@@ -14,7 +14,6 @@ import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import ThemeChangerAIO, template_from_url
 
 
-
 def download_and_compare_data(application='standalone'):
     """
     Main function to download and compare data.
@@ -86,55 +85,6 @@ def download_and_compare_data(application='standalone'):
         sensor_groups_df['sensor_ids'].to_list()
     ))
 
-
-    sensor_names = list(sensor_groups.keys())
-
-    # Get all ATMP sensor_ids using Polars
-    atmp_sensors_df = sensorinfo_df.filter(pl.col('variable_name') == 'ATMP')
-    atmp_sensors = atmp_sensors_df['sensor_id'].to_list()
-
-    # Convert to pandas for outlier calculations (easier with current numpy operations)
-    atmp_columns = [str(s) for s in atmp_sensors if str(s) in data_df.columns]
-    if atmp_columns:
-        # Convert datetime column to index for outlier calculations
-        atmp_data = data_df.select(['datetime'] + atmp_columns).to_pandas().set_index('datetime')
-        
-        # Calculate outlier masks using existing numpy operations
-        with np.errstate(divide='ignore', invalid='ignore'):
-            atmp_zscores = (atmp_data - atmp_data.mean(axis=1, skipna=True).values[:, None]) / atmp_data.std(axis=1, skipna=True).values[:, None]
-            atmp_zscores = atmp_zscores.fillna(0)
-            zscore_outlier_mask = np.abs(atmp_zscores) > 4
-
-            Q1 = atmp_data.quantile(0.25)
-            Q3 = atmp_data.quantile(0.75)
-            IQR = Q3 - Q1
-            iqr_outlier_mask = (atmp_data < (Q1 - 1.5 * IQR)) | (atmp_data > (Q3 + 1.5 * IQR))
-
-            median = atmp_data.median(axis=1, skipna=True)
-            mad = (np.abs(atmp_data.sub(median, axis=0))).median(axis=1, skipna=True)
-            modz = 0.6745 * (atmp_data.sub(median, axis=0)).div(mad, axis=0)
-            modz = modz.fillna(0)
-            modz_outlier_mask = np.abs(modz) > 3.5
-
-            lower = atmp_data.quantile(0.01)
-            upper = atmp_data.quantile(0.99)
-            percentile_outlier_mask = (atmp_data < lower) | (atmp_data > upper)
-
-            window = 24
-            rolling_mean = atmp_data.rolling(window, min_periods=1, center=True).mean()
-            rolling_std = atmp_data.rolling(window, min_periods=1, center=True).std()
-            rolling_zscore = (atmp_data - rolling_mean) / rolling_std
-            rolling_zscore = rolling_zscore.fillna(0)
-            rolling_outlier_mask = np.abs(rolling_zscore) > 4
-    else:
-        # Create empty masks if no ATMP data
-        atmp_data = None
-        zscore_outlier_mask = None
-        iqr_outlier_mask = None
-        modz_outlier_mask = None
-        percentile_outlier_mask = None
-        rolling_outlier_mask = None
-
     # Dash app
     BS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css"
     # app = dash.Dash(external_stylesheets=[BS])  
@@ -152,12 +102,6 @@ def download_and_compare_data(application='standalone'):
 
     theme_change = ThemeChangerAIO(aio_id="theme")
 
-
-#  # 2. Create a Dash app instance
-# app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
-
-# # 3. Add the example to the app's layout
-# # First we copy the snippet from the docs
     badge = dbc.Button(
         [
             "Notifications",
@@ -165,21 +109,9 @@ def download_and_compare_data(application='standalone'):
         ],
         color="primary",
     )
-
-# # Then we incorporate the snippet into our layout.
-# # This example keeps it simple and just wraps it in a Container
-
  
     app.layout = html.Div([
         theme_change,
-        # dbc.Container(badge, fluid=True),
-        # html.A(
-        #     "Open SharePoint Document",
-        #     href="https://wageningenur4.sharepoint.com/:x:/r/sites/Veenweiden/_layouts/15/Doc2.aspx?action=edit&sourcedoc=%7B3d741ab0-36f1-4687-953b-902b0a009582%7D&wdOrigin=TEAMS-MAGLEV.undefined_ns.rwc&wdExp=TEAMS-TREATMENT&wdhostclicktime=1750680875439&web=1",
-        #     target="_blank"
-        # ),
-        # html.H3("NaN Overview Table (click a cell to highlight below)"),
-        # datatable,
         dbc.Container(
             [
                 badge,
@@ -204,108 +136,7 @@ def download_and_compare_data(application='standalone'):
             value=['show'],
             style={'margin': '10px'}
         ),
-        # dcc.Dropdown(
-        #     id='outlier-method',
-        #     options=[
-        #         {'label': 'Z-score', 'value': 'zscore'},
-        #         {'label': 'IQR', 'value': 'iqr'},
-        #         {'label': 'Modified Z-score', 'value': 'modz'},
-        #         {'label': 'Percentile (1-99%)', 'value': 'percentile'},
-        #         {'label': 'Rolling Window Z-score', 'value': 'rolling'}
-        #     ],
-        #     value='zscore',
-        #     clearable=False,
-        #     style={'width': '200px', 'margin': '10px'}
-        # ),  
-        # dcc.Graph(id='highlight-graph'),
-        # html.Div([
-        #     dcc.Graph(id=f'graph-{i}', figure=make_figure(data_df, sensorinfo_df, sensor_groups, sensor_names[i]))
-        #     for i in range(len(sensor_names))
-        # ])
     ])
-
-    # @app.callback(
-    #     Output('highlight-graph', 'figure'),
-    #     [Input('nan-table', 'selectedRows'),  # Changed from selected_cells
-    #      Input('show-outliers', 'value'),
-    #      Input('outlier-method', 'value')]
-    # )
-    # def update_highlight_graph(selected_rows, show_outliers, outlier_method):
-    #     import plotly.graph_objects as go
-    #     fig = go.Figure()
-        
-    #     if not selected_rows:
-    #         return fig
-
-    #     print("Selected rows:", selected_rows)
-
-    #     # Collect all (site, var) pairs from selected rows
-    #     pairs = []
-    #     for row in selected_rows:
-    #         site = row['Site Name']
-    #         for var in var_names:
-    #             if var in row and row[var]:  # If the cell has a value
-    #                 pairs.append((site, var))
-
-    #     print("Pairs to plot:", pairs)
-
-    #     # Plot all selected (site, var) pairs
-    #     for site, var in pairs:
-    #         # Use Polars filtering
-    #         sensors = sensorinfo_df.filter(
-    #             (pl.col('site_name') == site) & (pl.col('variable_name') == var)
-    #         )['sensor_id'].to_list()
-            
-    #         if not sensors:
-    #             continue
-                
-    #         # Select outlier mask for this variable and method
-    #         mask = None
-    #         if var == 'ATMP' and atmp_data is not None:
-    #             if outlier_method == 'iqr':
-    #                 mask = iqr_outlier_mask
-    #             elif outlier_method == 'modz':
-    #                 mask = modz_outlier_mask
-    #             elif outlier_method == 'percentile':
-    #                 mask = percentile_outlier_mask
-    #             elif outlier_method == 'rolling':
-    #                 mask = rolling_outlier_mask
-    #             else:
-    #                 mask = zscore_outlier_mask
-                    
-    #         for sensor in sensors:
-    #             sensor_str = str(sensor)
-    #             if sensor_str not in data_df.columns:
-    #                 continue
-                    
-    #             # Convert to pandas for plotting
-    #             plot_data = data_df.select(['datetime', sensor_str]).to_pandas().set_index('datetime')
-    #             y = plot_data[sensor_str].copy()
-                
-    #             if var == 'ATMP' and mask is not None and sensor_str in atmp_data.columns and 'remove' in show_outliers:
-    #                 y = y.mask(mask[sensor_str])
-                    
-    #             fig.add_trace(go.Scatter(
-    #                 x=plot_data.index,
-    #                 y=y,
-    #                 mode='lines+markers',
-    #                 name=f"{site} ({sensor})",
-    #                 line=dict(width=1),
-    #                 marker=dict(size=3)
-    #             ))
-                
-    #             if var == 'ATMP' and mask is not None and sensor_str in atmp_data.columns and 'show' in show_outliers:
-    #                 outlier_idx = mask[sensor_str]
-    #                 fig.add_trace(go.Scatter(
-    #                     x=atmp_data.index[outlier_idx],
-    #                     y=atmp_data[sensor_str][outlier_idx],
-    #                     mode='markers',
-    #                     marker=dict(color='red', size=12, symbol='x'),
-    #                     name=f"{site} ({sensor}) Outlier"
-    #                 ))
-                    
-    #     fig.update_layout(title="Selected sensors", template="cyborg")
-    #     return fig
     
     app.index_string = f'''
     <!DOCTYPE html>
