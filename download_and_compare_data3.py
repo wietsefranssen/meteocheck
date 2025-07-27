@@ -1,6 +1,6 @@
 from curses.ascii import BS
 import dash
-from dash import Dash, dcc, html, Input, Output, State, ctx, dash_table
+from dash import Dash, dcc, html, Input, Output, State, ctx
 from src.plot import make_figure  
 from src.corrections import find_incorrect_airpressure_sensors, correct_airpressure_units 
 # from src.table import get_cell_values_and_colors, get_datatable #, generate_color_rules_and_css
@@ -13,6 +13,7 @@ import os
 import dash_bootstrap_components as dbc
 # from dash_bootstrap_templates import load_figure_template
 from dash_bootstrap_templates import ThemeChangerAIO, template_from_url
+import dash_ag_grid as dag
 
 def download_and_compare_data(application='standalone'):
     dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
@@ -127,55 +128,66 @@ def download_and_compare_data(application='standalone'):
 
     theme_change = ThemeChangerAIO(aio_id="theme")
 
-    # Create DataTable for NaN percentages
-    def create_nan_datatable(pivot_table):
-        """Create a Dash DataTable for NaN percentages with color coding"""
+    # Create AgGrid DataTable for NaN percentages
+    def create_aggrid_datatable(pivot_table):
+        """Create an ag-Grid DataTable for NaN percentages"""
         
-        # Prepare columns for DataTable
-        columns = [{"name": "Station", "id": "Station", "type": "text"}]
+        # Prepare column definitions for AgGrid
+        columnDefs = [
+            {"headerName": "Station", "field": "Station", "sortable": True, "filter": True, "pinned": "left"},
+        ]
+        
+        # Add variable columns with conditional formatting
         for col in pivot_table.columns[1:]:  # Skip 'Station' column
-            columns.append({
-                "name": col, 
-                "id": col, 
-                "type": "numeric",
-                "format": {"specifier": ".1f"}
+            columnDefs.append({
+                "headerName": col, 
+                "field": col, 
+                "sortable": True, 
+                "filter": True,
+                "type": "numericColumn",
+                "cellStyle": {
+                    "styleConditions": [
+                        {
+                            "condition": "params.value <= 10",
+                            "style": {"backgroundColor": "#d4edda", "color": "black"}
+                        },
+                        {
+                            "condition": "params.value > 10 && params.value <= 50", 
+                            "style": {"backgroundColor": "#fff3cd", "color": "black"}
+                        },
+                        {
+                            "condition": "params.value > 50 && params.value < 100",
+                            "style": {"backgroundColor": "#ffeaa7", "color": "black"}
+                        },
+                        {
+                            "condition": "params.value == 100",
+                            "style": {"backgroundColor": "#f8d7da", "color": "black"}
+                        }
+                    ]
+                }
             })
         
-        # Convert DataFrame to records for DataTable
-        data = pivot_table.to_dict('records')
-        
-        return dash_table.DataTable(
-            id='nan-percentage-table',
-            columns=columns,
-            data=data,
-            style_cell={
-                'textAlign': 'center',
-                'padding': '10px',
-                'fontFamily': 'Arial, sans-serif',
-                'fontSize': '12px',
-                'minWidth': '80px',
-                'width': '80px',
-                'maxWidth': '120px',
+        return dag.AgGrid(
+            id='nan-percentage-aggrid',
+            columnDefs=columnDefs,
+            rowData=pivot_table.to_dict('records'),
+            defaultColDef={
+                "flex": 1,
+                "minWidth": 100,
+                "editable": False,
+                "resizable": True
             },
-            style_header={
-                'backgroundColor': '#343a40',
-                'color': 'white',
-                'fontWeight': 'bold',
-                'textAlign': 'center'
+            dashGridOptions={
+                "pagination": True,
+                "paginationPageSize": 25,
+                "animateRows": True,
+                "rowSelection": "single",
+                "suppressRowClickSelection": False
             },
-            style_data={
-                'backgroundColor': 'white',
-                'color': 'black'
-            },
-            style_table={'overflowX': 'auto'},
-            page_size=25,
-            sort_action="native",
-            filter_action="native",
-            editable=False
+            style={"height": "600px"},
+            enableEnterpriseModules=False
         )
-    
-    datatable = create_nan_datatable(pivot_table)
-    print(f"Created datatable with {len(pivot_table)} rows and {len(pivot_table.columns)} columns")
+    aggrid_datatable = create_aggrid_datatable(pivot_table)
 
     badge = dbc.Button(
         [
@@ -197,8 +209,10 @@ def download_and_compare_data(application='standalone'):
                     html.Span("Orange", style={'color': '#fd7e14', 'fontWeight': 'bold'}), " indicates high missing data (50-99%), and ",
                     html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates no data available (100% missing)."
                 ], className="mb-3"),
-                datatable,
-                html.Div(id="cell-click-output", className="mt-3")
+                # datatable,
+                aggrid_datatable,
+                html.Div(id="cell-click-output", className="mt-3"),
+                html.Div(id="debug-output", className="mt-2", style={"fontSize": "12px", "color": "gray"})
             ],
             fluid=True,
             className="dbc dbc-ag-grid"
@@ -208,17 +222,32 @@ def download_and_compare_data(application='standalone'):
     # Callback for handling cell clicks
     @app.callback(
         Output('cell-click-output', 'children'),
-        Input('nan-percentage-table', 'active_cell'),
-        State('nan-percentage-table', 'data')
+        [
+         Input('nan-percentage-aggrid', 'cellClicked'),
+         Input('nan-percentage-aggrid', 'selectedRows')],
     )
-    def display_click_data(active_cell, data):
-        if active_cell:
-            row_idx = active_cell['row']
-            col_id = active_cell['column_id']
-            
-            if col_id != 'Station' and row_idx < len(data):
-                station = data[row_idx]['Station']
-                nan_percentage = data[row_idx][col_id]
+    def display_click_data(aggrid_clicked, aggrid_selected):
+        ctx_trigger = ctx.triggered[0]['prop_id'] if ctx.triggered else None
+                
+        if ('nan-percentage-aggrid' in str(ctx_trigger)):
+            # Handle both cellClicked and selectedRows events
+            if aggrid_clicked and aggrid_clicked.get('colId') != 'Station':
+                # Handle the actual structure of cellClicked event
+                if 'rowData' in aggrid_clicked:
+                    station = aggrid_clicked['rowData']['Station']
+                elif 'data' in aggrid_clicked:
+                    station = aggrid_clicked['data']['Station']
+                else:
+                    # Try to get station from rowIndex and aggrid data
+                    row_index = aggrid_clicked.get('rowIndex', 0)
+                    pivot_records = pivot_table.to_dict('records')
+                    if row_index < len(pivot_records):
+                        station = pivot_records[row_index]['Station']
+                    else:
+                        station = 'Unknown'
+                
+                col_id = aggrid_clicked['colId']
+                nan_percentage = aggrid_clicked.get('value', 0)
                 
                 # Find the corresponding sensor information
                 sensor_name = ''
@@ -242,7 +271,7 @@ def download_and_compare_data(application='standalone'):
                     sensor_id = 'Unknown'
                 
                 return dbc.Alert([
-                    html.H5(f"Selected: {station} - {col_id}", className="alert-heading"),
+                    html.H5(f"AgGrid Selected: {station} - {col_id}", className="alert-heading"),
                     html.P([
                         f"Station: {station}",
                         html.Br(),
@@ -256,8 +285,43 @@ def download_and_compare_data(application='standalone'):
                         html.Br(),
                         f"Available data: {100 - nan_percentage:.1f}%"
                     ])
-                ], color="info", dismissable=True)
+                ], color="success", dismissable=True)
+            
+            elif aggrid_selected and len(aggrid_selected) > 0:
+                # Fallback to selectedRows if cellClicked doesn't work
+                selected_row = aggrid_selected[0]
+                station = selected_row['Station']
+                
+                return dbc.Alert([
+                    html.H5(f"AgGrid Row Selected: {station}", className="alert-heading"),
+                    html.P([
+                        f"Station: {station}",
+                        html.Br(),
+                        f"Click on a specific data cell to see detailed sensor information."
+                    ])
+                ], color="warning", dismissable=True)
         
+        return ""
+    
+    # Debug callback to see what AgGrid events are firing
+    @app.callback(
+        Output('debug-output', 'children'),
+        [Input('nan-percentage-aggrid', 'cellClicked'),
+         Input('nan-percentage-aggrid', 'selectedRows')]
+    )
+    def debug_aggrid_events(cell_clicked, selected_rows):
+        if cell_clicked:
+            return html.Div([
+                html.P(f"Cell clicked event structure:"),
+                html.Pre(f"{cell_clicked}"),
+                html.Hr()
+            ])
+        if selected_rows:
+            return html.Div([
+                html.P(f"Rows selected: {len(selected_rows)} rows"),
+                html.Pre(f"First row: {selected_rows[0] if selected_rows else 'None'}"),
+                html.Hr()
+            ])
         return ""
     
     return app
