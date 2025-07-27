@@ -11,13 +11,16 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
     return html.Div([
         theme_change,
         dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
+        dcc.Store(id='selection-pending-store', data=False),  # Store for tracking if selection is pending
         dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
-        dcc.Interval(id="selection-interval", interval=500, n_intervals=0),  # Check every 500ms
+        dcc.Interval(id="selection-interval", interval=200, n_intervals=0, max_intervals=-1),  # Check every 200ms, but debounced to 800ms
         dbc.Container(
             [
                 html.H3("Data Availability Table", className="mb-4"),
                 html.P([
-                    "💡 Tip: Use Ctrl+click to select multiple cells, or drag to select ranges. Selected cells will be highlighted below."
+                    "💡 Tip: Use Ctrl+click to select multiple cells, or drag to select ranges. ",
+                    "Selection updates are debounced (800ms delay) to prevent sudden browser refreshes. ",
+                    "Selected cells and timeline will appear below after you finish selecting."
                 ], className="mb-3", style={"fontSize": "14px", "color": "#6c757d", "fontStyle": "italic"}),
                 html.P([
                     f"Data period: {dm.start_dt.strftime('%Y-%m-%d %H:%M')} to {dm.end_dt.strftime('%Y-%m-%d %H:%M')} "
@@ -30,12 +33,7 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
                     html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates poor data availability (<30%)."
                 ], className="mb-3"),
                 aggrid_datatable,
-                html.Div(id="selection-info", className="mt-3 mb-3", style={
-                    "backgroundColor": "#f8f9fa", 
-                    "padding": "10px", 
-                    "borderRadius": "5px",
-                    "border": "1px solid #dee2e6"
-                }),
+                html.Div(id="selection-info", className="mt-3 mb-3"),
                 dcc.Graph(id="timeline-graph", style={"display": "none"}),
                 html.Div(id="cell-click-output", className="mt-3"),
                 html.Div(id="debug-output", className="mt-2", style={"fontSize": "12px", "color": "gray"})
