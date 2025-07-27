@@ -3,16 +3,21 @@ import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import ThemeChangerAIO
 
 
-def create_app_layout(dm, data_df, aggrid_datatable):
+def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
     """Create the main application layout"""
     
     theme_change = ThemeChangerAIO(aio_id="theme")
     
     return html.Div([
         theme_change,
+        dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
+        dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
         dbc.Container(
             [
-                html.H3("Data Availability Table (click a cell to highlight below)", className="mb-4"),
+                html.H3("Data Availability Table (select multiple rows/cells to see selection)", className="mb-4"),
+                html.P([
+                    "💡 Tip: Use Ctrl+click to select multiple rows, or Shift+click for range selection. Click on data cells to select/deselect them (toggle behavior)."
+                ], className="mb-3", style={"fontSize": "14px", "color": "#6c757d", "fontStyle": "italic"}),
                 html.P([
                     f"Data period: {dm.start_dt.strftime('%Y-%m-%d %H:%M')} to {dm.end_dt.strftime('%Y-%m-%d %H:%M')} "
                     f"({len(data_df)} data points)"
@@ -24,6 +29,18 @@ def create_app_layout(dm, data_df, aggrid_datatable):
                     html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates poor data availability (<30%)."
                 ], className="mb-3"),
                 aggrid_datatable,
+                html.Div(id="selection-info", className="mt-3 mb-3", style={
+                    "backgroundColor": "#f8f9fa", 
+                    "padding": "10px", 
+                    "borderRadius": "5px",
+                    "border": "1px solid #dee2e6"
+                }),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button("Clear Cell Selections", id="clear-cells-btn", color="secondary", size="sm", className="me-2"),
+                        dbc.Button("Clear All Selections", id="clear-all-btn", color="warning", size="sm")
+                    ], width="auto")
+                ], className="mb-3"),
                 dcc.Graph(id="timeline-graph", style={"display": "none"}),
                 html.Div(id="cell-click-output", className="mt-3"),
                 html.Div(id="debug-output", className="mt-2", style={"fontSize": "12px", "color": "gray"})

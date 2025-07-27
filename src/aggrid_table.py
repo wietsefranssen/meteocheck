@@ -50,13 +50,16 @@ def create_aggrid_datatable(pivot_table, check_table):
         dashGridOptions={
             "pagination": False,
             "animateRows": True,
-            "rowSelection": "single",
+            "rowSelection": "multiple",
+            "rowMultiSelectWithClick": True,
             "suppressRowClickSelection": False,
             "enableRangeSelection": True,
+            "enableCellSelection": True,
             "suppressCellFocus": False,
             "rowHeight": 30,
-            "domLayout": "autoHeight"
-
+            "domLayout": "autoHeight",
+            "suppressMovableColumns": True,
+            "enableBrowserTooltips": True
         },
         style={"width": "100%"},
     )
