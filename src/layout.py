@@ -12,11 +12,12 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
         theme_change,
         dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
         dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
+        dcc.Interval(id="selection-interval", interval=500, n_intervals=0),  # Check every 500ms
         dbc.Container(
             [
-                html.H3("Data Availability Table (select multiple rows/cells to see selection)", className="mb-4"),
+                html.H3("Data Availability Table", className="mb-4"),
                 html.P([
-                    "💡 Tip: Use Ctrl+click to select multiple rows, or Shift+click for range selection. Click on data cells to select/deselect them (toggle behavior)."
+                    "💡 Tip: Use Ctrl+click to select multiple cells, or drag to select ranges. Selected cells will be highlighted below."
                 ], className="mb-3", style={"fontSize": "14px", "color": "#6c757d", "fontStyle": "italic"}),
                 html.P([
                     f"Data period: {dm.start_dt.strftime('%Y-%m-%d %H:%M')} to {dm.end_dt.strftime('%Y-%m-%d %H:%M')} "
@@ -35,12 +36,6 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
                     "borderRadius": "5px",
                     "border": "1px solid #dee2e6"
                 }),
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Button("Clear Cell Selections", id="clear-cells-btn", color="secondary", size="sm", className="me-2"),
-                        dbc.Button("Clear All Selections", id="clear-all-btn", color="warning", size="sm")
-                    ], width="auto")
-                ], className="mb-3"),
                 dcc.Graph(id="timeline-graph", style={"display": "none"}),
                 html.Div(id="cell-click-output", className="mt-3"),
                 html.Div(id="debug-output", className="mt-2", style={"fontSize": "12px", "color": "gray"})

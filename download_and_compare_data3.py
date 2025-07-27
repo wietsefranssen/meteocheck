@@ -1,6 +1,6 @@
 from curses.ascii import BS
 import dash
-from dash import Dash, dcc, html, Input, Output, State, ctx
+from dash import Dash, dcc, html, Input, Output, State, ctx, clientside_callback
 from src.plot import make_figure  
 from src.corrections import find_incorrect_airpressure_sensors, correct_airpressure_units 
 from src.tablenew import create_nan_percentage_table
