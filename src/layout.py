@@ -1,4 +1,4 @@
-from dash import html
+from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import ThemeChangerAIO
 
@@ -24,6 +24,7 @@ def create_app_layout(dm, data_df, aggrid_datatable):
                     html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates poor data availability (<30%)."
                 ], className="mb-3"),
                 aggrid_datatable,
+                dcc.Graph(id="timeline-graph", style={"display": "none"}),
                 html.Div(id="cell-click-output", className="mt-3"),
                 html.Div(id="debug-output", className="mt-2", style={"fontSize": "12px", "color": "gray"})
             ],

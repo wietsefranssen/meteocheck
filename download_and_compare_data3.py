@@ -74,7 +74,7 @@ def download_and_compare_data(application='standalone'):
     app.layout = create_app_layout(dm, data_df, aggrid_datatable)
     
     # Register callbacks from separate file
-    register_callbacks(app, pivot_table, check_table, nan_table)
+    register_callbacks(app, pivot_table, check_table, nan_table, data_df)
     
     return app
 

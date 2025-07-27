@@ -1,21 +1,31 @@
 import dash
-from dash import html, Input, Output, ctx
+from dash import html, Input, Output, ctx, dcc
 import dash_bootstrap_components as dbc
 import pandas as pd
+from dash_bootstrap_templates import ThemeChangerAIO
+from .timeline_plot import create_timeline_plot
 
 
-def register_callbacks(app, pivot_table, check_table, nan_table):
+def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     """Register all callbacks for the data availability table application"""
     
-    # Callback for handling cell clicks
+    # Callback for handling cell clicks and updating both info and graph
     @app.callback(
-        Output('cell-click-output', 'children'),
+        [Output('cell-click-output', 'children'),
+         Output('timeline-graph', 'figure'),
+         Output('timeline-graph', 'style')],
         [
          Input('nan-percentage-aggrid', 'cellClicked'),
-         Input('nan-percentage-aggrid', 'selectedRows')],
+         Input('nan-percentage-aggrid', 'selectedRows'),
+         Input(ThemeChangerAIO.ids.radio("theme"), "value")],
     )
-    def display_click_data(aggrid_clicked, aggrid_selected):
+    def display_click_data(aggrid_clicked, aggrid_selected, theme_url):
         ctx_trigger = ctx.triggered[0]['prop_id'] if ctx.triggered else None
+        
+        # Default returns
+        empty_fig = {"data": [], "layout": {}}
+        hidden_style = {"display": "none"}
+        visible_style = {"display": "block"}
                 
         if ('nan-percentage-aggrid' in str(ctx_trigger)):
             # Handle both cellClicked and selectedRows events
@@ -58,8 +68,11 @@ def register_callbacks(app, pivot_table, check_table, nan_table):
                     sensor_name = 'Unknown'
                     sensor_id = 'Unknown'
                 
-                return dbc.Alert([
-                    html.H5(f"AgGrid Selected: {station} - {col_id}", className="alert-heading"),
+                # Create timeline plot
+                timeline_fig = create_timeline_plot(data_df, sensor_id, station, col_id, sensor_name, theme_url)
+                
+                alert = dbc.Alert([
+                    html.H5(f"Selected: {station} - {col_id}", className="alert-heading"),
                     html.P([
                         f"Station: {station}",
                         html.Br(),
@@ -74,22 +87,26 @@ def register_callbacks(app, pivot_table, check_table, nan_table):
                         f"Missing data: {100 - availability_percentage:.1f}%"
                     ])
                 ], color="success", dismissable=True)
+                
+                return alert, timeline_fig, visible_style
             
             elif aggrid_selected and len(aggrid_selected) > 0:
                 # Fallback to selectedRows if cellClicked doesn't work
                 selected_row = aggrid_selected[0]
                 station = selected_row['Station']
                 
-                return dbc.Alert([
-                    html.H5(f"AgGrid Row Selected: {station}", className="alert-heading"),
+                alert = dbc.Alert([
+                    html.H5(f"Row Selected: {station}", className="alert-heading"),
                     html.P([
                         f"Station: {station}",
                         html.Br(),
-                        f"Click on a specific data cell to see detailed sensor information."
+                        f"Click on a specific data cell to see detailed sensor information and timeline."
                     ])
                 ], color="warning", dismissable=True)
+                
+                return alert, empty_fig, hidden_style
         
-        return ""
+        return "", empty_fig, hidden_style
     
     # Debug callback to see what AgGrid events are firing
     @app.callback(
