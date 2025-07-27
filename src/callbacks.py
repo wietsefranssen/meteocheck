@@ -3,21 +3,12 @@ from dash import html, Input, Output, State, ctx, dcc, clientside_callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 from dash_bootstrap_templates import ThemeChangerAIO
-from .timeline_plot import create_timeline_plot
+from .timeline_plot import create_timeline_plot, create_multi_timeline_plot
 
 
 def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     """Register all callbacks for the data availability table application"""
     
-import dash
-from dash import html, Input, Output, State, ctx, dcc, clientside_callback
-import dash_bootstrap_components as dbc
-import pandas as pd
-from dash_bootstrap_templates import ThemeChangerAIO
-from .timeline_plot import create_timeline_plot
-
-
-def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     """Register all callbacks for the data availability table application"""
     
     # Clientside callback to continuously check for selected cells using AG Grid API
@@ -104,45 +95,23 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
                 selection_info.append(html.P(f"  ... showing last 5 of {cell_count} selected", 
                                            className="mb-1", style={"marginLeft": "20px", "fontStyle": "italic"}))
             
-            # Show timeline for the most recent selection
-            if selected_cells:
-                latest_cell = selected_cells[-1]
-                station = latest_cell.get('station', '')
-                col_id = latest_cell.get('variable', '')
-                availability_percentage = latest_cell.get('value', 0)
-                
-                # Find the corresponding sensor information
-                sensor_name = ''
-                sensor_id = ''
-                try:
-                    station_row = check_table[check_table['station'] == station]
-                    if not station_row.empty and col_id in station_row.columns:
-                        sensor_name = station_row.iloc[0][col_id]
-                        if pd.isna(sensor_name):
-                            sensor_name = 'Not assigned'
-                        else:
-                            # Find matching sensor_id from nan_table
-                            matching_row = nan_table[
-                                (nan_table['Station'] == station) & 
-                                (nan_table['Variable'] == col_id)
-                            ]
-                            if not matching_row.empty:
-                                sensor_id = matching_row.iloc[0]['Sensor_ID']
-                except Exception as e:
-                    sensor_name = 'Unknown'
-                    sensor_id = 'Unknown'
-                
-                # Create timeline plot for latest selected cell
-                timeline_fig = create_timeline_plot(data_df, sensor_id, station, col_id, sensor_name, theme_url)
-                
-                # Add info about the displayed timeline
-                selection_info.append(html.Hr(className="my-2"))
-                selection_info.append(html.P([
-                    html.Strong("Timeline showing: "),
-                    f"{station} - {col_id} ({sensor_name})"
-                ], className="mb-1", style={"color": "#007bff"}))
-                
-                return selection_info, timeline_fig, visible_style
+            # Create multi-timeline plot for all selected cells
+            timeline_fig = create_multi_timeline_plot(data_df, selected_cells, check_table, nan_table, theme_url)
+            
+            # Add info about the displayed timeline
+            selection_info.append(html.Hr(className="my-2"))
+            unique_sensors = set()
+            for cell in selected_cells:
+                station = cell.get('station', '')
+                variable = cell.get('variable', '')
+                unique_sensors.add(f"{station} - {variable}")
+            
+            selection_info.append(html.P([
+                html.Strong("Timeline showing: "),
+                f"{len(unique_sensors)} unique sensors from selected cells"
+            ], className="mb-1", style={"color": "#007bff"}))
+            
+            return selection_info, timeline_fig, visible_style
         
         # If no selections, show helpful message
         selection_info = [html.P("No cells selected. Use Ctrl+Click or drag to select cells in the table above.", 
