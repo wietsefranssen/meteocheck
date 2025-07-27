@@ -11,11 +11,20 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     
     """Register all callbacks for the data availability table application"""
     
-    # Clientside callback to continuously check for selected cells using AG Grid API with simple debouncing
+    # Use AG-Grid's native selection events instead of polling
     clientside_callback(
-        """async (n_intervals) => {
+        """
+        function(cellClicked, cellValueChanged) {
             try {
-                const gridApi = await dash_ag_grid.getApiAsync("nan-percentage-aggrid");
+                // Only proceed if we have a grid API available
+                if (typeof window.dash_ag_grid === 'undefined') {
+                    return dash_clientside.no_update;
+                }
+                
+                const gridApi = window.dash_ag_grid.getApi("nan-percentage-aggrid");
+                if (!gridApi) {
+                    return dash_clientside.no_update;
+                }
                 
                 let cellData = [];
                 
@@ -31,7 +40,6 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
                             if (rowNode) {
                                 range.columns.forEach(column => {
                                     const colKey = column.getColId();
-                                    // Skip the Station column for selection
                                     if (colKey !== 'Station') {
                                         const value = rowNode.data[colKey];
                                         const station = rowNode.data['Station'];
@@ -49,60 +57,17 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
                     });
                 }
                 
-                // Create a unique identifier for the current selection to detect changes
-                const currentSelection = JSON.stringify(cellData.map(cell => `${cell.station}-${cell.variable}`).sort());
-                
-                // Initialize if not exists
-                if (typeof window.lastSelectionHash === 'undefined') {
-                    window.lastSelectionHash = '';
-                    window.lastChangeTime = 0;
-                }
-                
-                const now = Date.now();
-                
-                // Check if selection has changed
-                if (window.lastSelectionHash !== currentSelection) {
-                    window.lastSelectionHash = currentSelection;
-                    window.lastChangeTime = now;
-                    window.pendingSelection = cellData;
-                    // Don't update immediately - wait for debounce period
-                    return dash_clientside.no_update;
-                } else {
-                    // Selection hasn't changed - check if enough time has passed since last change
-                    if (window.pendingSelection && (now - window.lastChangeTime) >= 800) {
-                        // Debounce period has passed, send the update
-                        const result = window.pendingSelection;
-                        window.pendingSelection = null;
-                        return result;
-                    }
-                    
-                    // Either no pending selection or debounce period not yet passed
-                    return dash_clientside.no_update;
-                }
+                return cellData;
                 
             } catch (error) {
-                console.log('Grid not ready yet or error:', error);
-                return dash_clientside.no_update;
+                console.log('Error getting selection:', error);
+                return [];
             }
-        }""",
-        Output("selected-cells-store", "data"),
-        Input("selection-interval", "n_intervals"),
-        prevent_initial_call=True
-    )
-
-    # Optional: Add callback to track pending selections and show visual feedback
-    clientside_callback(
-        """
-        function(n_intervals) {
-            // Check if there's a pending selection update
-            if (typeof window.pendingSelection !== 'undefined' && window.pendingSelection !== null) {
-                return true;  // Selection is pending
-            }
-            return false;  // No pending selection
         }
         """,
-        Output("selection-pending-store", "data"),
-        Input("selection-interval", "n_intervals"),
+        Output("selected-cells-store", "data"),
+        [Input("nan-percentage-aggrid", "cellClicked"),
+         Input("nan-percentage-aggrid", "cellValueChanged")],
         prevent_initial_call=True
     )
 
@@ -113,10 +78,9 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
          Output('timeline-graph', 'figure'),
          Output('timeline-graph', 'style')],
         [Input('selected-cells-store', 'data'),
-         Input('selection-pending-store', 'data'),
          Input(ThemeChangerAIO.ids.radio("theme"), "value")],
     )
-    def display_selection_data(selected_cells, is_pending, theme_url):
+    def display_selection_data(selected_cells, theme_url):
         # Base style for selection info
         base_style = {
             "backgroundColor": "#f8f9fa", 
@@ -124,14 +88,6 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
             "borderRadius": "5px",
             "border": "1px solid #dee2e6"
         }
-        
-        # Show pending state if selection is being debounced
-        if is_pending and (not selected_cells or len(selected_cells) == 0):
-            base_style.update({
-                "backgroundColor": "#fff3cd",
-                "border": "1px solid #ffeaa7",
-                "transition": "all 0.3s ease"
-            })
         
         # Default returns
         empty_fig = {"data": [], "layout": {}}
@@ -178,11 +134,8 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
             
             return selection_info, base_style, timeline_fig, visible_style
         
-        # If no selections, show helpful message with debounce info
-        selection_info = [html.P([
-            "No cells selected. Use Ctrl+Click or drag to select cells in the table above. ",
-            html.Small("(Updates are debounced by 800ms for smooth performance)", 
-                      style={"color": "#9ea1a5", "fontStyle": "italic"})
-        ], style={"color": "#6c757d", "fontStyle": "italic"})]
+        # If no selections, show helpful message
+        selection_info = [html.P("No cells selected. Use Ctrl+Click or drag to select cells in the table above.", 
+                               style={"color": "#6c757d", "fontStyle": "italic"})]
                 
         return selection_info, base_style, empty_fig, hidden_style

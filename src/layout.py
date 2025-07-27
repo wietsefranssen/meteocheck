@@ -11,16 +11,14 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
     return html.Div([
         theme_change,
         dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
-        dcc.Store(id='selection-pending-store', data=False),  # Store for tracking if selection is pending
         dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
-        dcc.Interval(id="selection-interval", interval=200, n_intervals=0, max_intervals=-1),  # Check every 200ms, but debounced to 800ms
         dbc.Container(
             [
                 html.H3("Data Availability Table", className="mb-4"),
                 html.P([
                     "💡 Tip: Use Ctrl+click to select multiple cells, or drag to select ranges. ",
-                    "Selection updates are debounced (800ms delay) to prevent sudden browser refreshes. ",
-                    "Selected cells and timeline will appear below after you finish selecting."
+                    "Selection updates are event-driven for instant response without browser polling. ",
+                    "Selected cells and timeline will appear below immediately."
                 ], className="mb-3", style={"fontSize": "14px", "color": "#6c757d", "fontStyle": "italic"}),
                 html.P([
                     f"Data period: {dm.start_dt.strftime('%Y-%m-%d %H:%M')} to {dm.end_dt.strftime('%Y-%m-%d %H:%M')} "
