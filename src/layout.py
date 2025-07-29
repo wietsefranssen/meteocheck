@@ -6,10 +6,10 @@ from dash_bootstrap_templates import ThemeChangerAIO
 def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
     """Create the main application layout"""
     
-    theme_change = ThemeChangerAIO(aio_id="theme")
+    # theme_change = ThemeChangerAIO(aio_id="theme")
     
     return html.Div([
-        theme_change,
+        # theme_change,
         dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
         dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
         dbc.Container(

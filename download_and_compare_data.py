@@ -1,6 +1,6 @@
 from curses.ascii import BS
 import dash
-from dash import Dash, dcc, html, Input, Output, State, ctx, clientside_callback
+from dash import Dash, dcc, html, Input, Output, State, clientside_callback
 from src.plot import make_figure  
 from src.corrections import find_incorrect_airpressure_sensors, correct_airpressure_units 
 from src.tablenew import create_nan_percentage_table
@@ -30,7 +30,7 @@ def download_and_compare_data(application='standalone'):
     dm.set_temp_path(os.path.join(basepath, 'temp'))
 
     dm.set_dates(days_back=7, offset=1)
-    # dm.set_dates(start_dt='2025-07-03', end_dt='2025-07-10 23:58:00')
+    dm.set_dates(start_dt='2025-07-22', end_dt='2025-07-29 23:58:00')
     print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
     dm.download_or_load_data()

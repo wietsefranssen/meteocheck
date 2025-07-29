@@ -77,10 +77,11 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
          Output('selection-info', 'style'),
          Output('timeline-graph', 'figure'),
          Output('timeline-graph', 'style')],
-        [Input('selected-cells-store', 'data'),
-         Input(ThemeChangerAIO.ids.radio("theme"), "value")],
+        [Input('selected-cells-store', 'data')
+        #  Input(ThemeChangerAIO.ids.radio("theme"), "value")
+         ],
     )
-    def display_selection_data(selected_cells, theme_url):
+    def display_selection_data(selected_cells, theme_url=None):
         # Base style for selection info
         base_style = {
             "backgroundColor": "#f8f9fa", 
