@@ -137,8 +137,8 @@ def download_and_compare_data(application='standalone'):
         app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
     elif application=='django':
         from django_plotly_dash import DjangoDash
-        # app = DjangoDash(name='dash_meteo', external_stylesheets=[dbc.themes.BOOTSTRAP])
-        app = DjangoDash(name='dash_meteo', external_stylesheets=[dbc.themes.DARKLY])
+        app = DjangoDash(name='dash_meteo', external_stylesheets=[dbc.themes.BOOTSTRAP],use_pages=True)
+        # app = DjangoDash(name='dash_meteo', external_stylesheets=[dbc.themes.DARKLY])
     else:
         app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
