@@ -44,8 +44,8 @@ def create_aggrid_datatable(pivot_table, check_table):
         columnDefs=columnDefs,
         rowData=pivot_table.to_dict('records'),
         defaultColDef={
-            "flex": 1,
-            "minWidth": 100,
+            "minWidth": 80,  # Reduced from 100
+            "width": 90,     # Set fixed width instead of flex
             "editable": False,
             "resizable": True
         },
