@@ -10,9 +10,8 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
     
     return html.Div([
         # theme_change,
-        # Store to track Django theme changes
+        # Store to track Django theme changes (updated only when theme switcher is clicked)
         dcc.Store(id='django-theme-store', data='light'),
-        dcc.Interval(id='theme-interval', interval=2000, n_intervals=0),  # Check theme every 2 seconds
         dcc.Store(id='selected-cells-store', data=[]),  # Store for tracking selected cells
         dcc.Store(id='pivot-table-store', data=pivot_table.to_dict('records')),  # Store pivot table data
         dbc.Container(

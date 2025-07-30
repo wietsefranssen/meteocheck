@@ -50,20 +50,7 @@ def get_plotly_theme(is_dark=False):
 def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     """Register all callbacks for the data availability table application"""
     
-    # Clientside callback to detect Django theme changes
-    app.clientside_callback(
-        """
-        function(n_intervals) {
-            const htmlElement = document.documentElement;
-            const currentTheme = htmlElement.getAttribute('data-bs-theme') || 'light';
-            return currentTheme;
-        }
-        """,
-        Output('django-theme-store', 'data'),
-        [Input('theme-interval', 'n_intervals')]
-    )
-    
-    # Remove the clientside callback and use this server-side callback instead
+    # Cell selection callback
     @app.callback(
         Output("selected-cells-store", "data"),
         [Input("nan-percentage-aggrid", "cellClicked"),
@@ -109,6 +96,19 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
         return all_cells
 
     # Main callback for handling selection changes and updating info and graph
+    app.clientside_callback(
+        """
+        function(selected_cells) {
+            // Get current theme when callback runs
+            const htmlElement = document.documentElement;
+            const currentTheme = htmlElement.getAttribute('data-bs-theme') || 'light';
+            return currentTheme;
+        }
+        """,
+        Output('django-theme-store', 'data'),
+        [Input('selected-cells-store', 'data')]
+    )
+    
     @app.callback(
         [Output('selection-info', 'children'),
          Output('selection-info', 'style'),
@@ -118,13 +118,8 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
          Input('django-theme-store', 'data')],
     )
     def display_selection_data(selected_cells, theme_data):
-        # Get current theme
-        current_theme = 'light'  # default
-        if theme_data:
-            if isinstance(theme_data, dict):
-                current_theme = theme_data.get('theme', 'light')
-            elif isinstance(theme_data, str):
-                current_theme = theme_data
+        # Get current theme - this will be updated by the clientside callback
+        current_theme = theme_data if isinstance(theme_data, str) else 'light'
         
         # Base style for selection info (theme-aware)
         if current_theme == 'dark':
