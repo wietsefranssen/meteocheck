@@ -6,18 +6,18 @@ from datetime import datetime
 from dash_bootstrap_templates import template_from_url
 
 
-def create_timeline_plot(data_df, sensor_id, station, variable, sensor_name, theme_url=None):
+def create_timeline_plot(data_df, sensor_id, station, variable, sensor_name):
     """Create a timeline plot for the selected sensor data"""
     
     # Determine the template based on theme URL
-    if theme_url:
-        try:
-            template = template_from_url(theme_url)
-        except:
-            template = "plotly_white"
-    else:
-        template = "plotly_white"
-    
+    # if theme_url:
+    #     try:
+    #         template = template_from_url(theme_url)
+    #     except:
+    #         template = "plotly_white"
+    # else:
+    #     template = "plotly_white"
+    template = "plotly_white"  # Default template if theme_url is not provided
     if not sensor_id or sensor_id == '' or sensor_id not in data_df.columns:
         # Return empty figure if no valid sensor_id
         fig = go.Figure()
@@ -128,17 +128,17 @@ def create_timeline_plot(data_df, sensor_id, station, variable, sensor_name, the
         return fig
 
 
-def create_multi_timeline_plot(data_df, selected_cells, check_table, nan_table, theme_url=None):
+def create_multi_timeline_plot(data_df, selected_cells, check_table, nan_table):
     """Create a timeline plot showing multiple selected sensors"""
     
     # Determine the template based on theme URL
-    if theme_url:
-        try:
-            template = template_from_url(theme_url)
-        except:
-            template = "plotly_white"
-    else:
-        template = "plotly_white"
+    # if theme_url:
+    #     try:
+    #         template = template_from_url(theme_url)
+    #     except:
+    #         template = "plotly_white"
+    # else:
+    template = "plotly_white"
     
     if not selected_cells or len(selected_cells) == 0:
         # Return empty figure if no selections

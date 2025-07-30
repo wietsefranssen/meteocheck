@@ -51,17 +51,23 @@ def create_aggrid_datatable(pivot_table, check_table):
         dashGridOptions={
             "pagination": False,
             "animateRows": True,
-            "rowSelection": "none",  # Disable row selection
-            "enableRangeSelection": True,
-            "enableCellSelection": True,
+            # "rowSelection": "none",  # Disable row selection
+            # "cellSelection.handle": True,  # Enable cell selection handles
+            # "enableRangeSelection": True,
+            "cellSelection.handles": True,  # Enable cell selection handles
+            # "enableCellSelection": True,
+            # "cellSelection": True,
             "suppressCellFocus": False,
             "rowHeight": 30,
             "domLayout": "autoHeight",
             "suppressMovableColumns": True,
             "enableBrowserTooltips": True,
-            "suppressRowClickSelection": True,  # Prevent row selection on click
-            "suppressMultiRangeSelection": False,  # Allow multiple range selections
-            "enableRangeHandle": True,  # Enable drag handle for range selection
+            # "suppressRowClickSelection": True,  # Prevent row selection on click
+            "rowSelection.enableClickSelection": False,  # Disable click selection
+            # "suppressMultiRangeSelection": False,  # Allow multiple range selections
+            "cellSelection.suppressMultiRanges": False,  # Allow multiple ranges in cell selection
+            # "enableRangeHandle": True,  # Enable drag handle for range selection
+            "cellSelection.handle": True,  # Enable cell selection handles
         },
         style={"width": "100%"},
     )

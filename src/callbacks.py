@@ -81,7 +81,7 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
         #  Input(ThemeChangerAIO.ids.radio("theme"), "value")
          ],
     )
-    def display_selection_data(selected_cells, theme_url=None):
+    def display_selection_data(selected_cells):
         # Base style for selection info
         base_style = {
             "backgroundColor": "#f8f9fa", 
