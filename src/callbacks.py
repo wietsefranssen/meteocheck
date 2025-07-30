@@ -17,7 +17,7 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     )
     def handle_cell_click(cell_clicked):
         if cell_clicked:
-            print(f"Cell clicked: {cell_clicked}")  # Debug output
+            # print(f"Cell clicked: {cell_clicked}")  # Debug output
             
             # Extract station from rowData or use rowIndex to get it from pivot_table
             station = ''
@@ -37,7 +37,7 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
                 'variable': cell_clicked.get('colId', ''),
                 'value': cell_clicked.get('value', 0)
             }
-            print(f"Transformed cell: {transformed_cell}")
+            # print(f"Transformed cell: {transformed_cell}")
             
             return [transformed_cell]
         return []
