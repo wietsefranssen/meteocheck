@@ -6,7 +6,7 @@ def create_aggrid_datatable(pivot_table, check_table):
     
     # Prepare column definitions for AgGrid
     columnDefs = [
-        {"headerName": "Station", "field": "Station", "sortable": True, "filter": True, "pinned": "left"},
+        {"headerName": "Station", "field": "Station", "sortable": True, "filter": False, "suppressMenu": True, "pinned": "left"},
     ]
     
     # Add variable columns with conditional formatting in check_table order
@@ -16,7 +16,8 @@ def create_aggrid_datatable(pivot_table, check_table):
                 "headerName": col, 
                 "field": col, 
                 "sortable": True, 
-                "filter": True,
+                "filter": False,  # Disable filter to remove menu icons
+                "suppressMenu": True,  # Explicitly suppress menu for each column
                 "type": "numericColumn",
                 "cellStyle": {
                     "styleConditions": [
@@ -71,6 +72,8 @@ def create_aggrid_datatable(pivot_table, check_table):
             "enableRangeSelection": True,
             "enableCellSelection": True,
             "suppressRowClickSelection": True,
+            "suppressMenuHide": True,  # Hide column menu icons
+            "suppressColumnMenus": True,  # Remove column options icons completely
         },
         style={"width": "100%"},
     )
