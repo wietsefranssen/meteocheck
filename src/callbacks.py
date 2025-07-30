@@ -9,9 +9,7 @@ from .timeline_plot import create_timeline_plot, create_multi_timeline_plot
 def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     """Register all callbacks for the data availability table application"""
     
-    """Register all callbacks for the data availability table application"""
-    
-    # Replace the clientside callback with a server-side one for testing:
+    # Add this callback to capture cell clicks
     @app.callback(
         Output("selected-cells-store", "data"),
         [Input("nan-percentage-aggrid", "cellClicked")],
@@ -19,9 +17,92 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     )
     def handle_cell_click(cell_clicked):
         if cell_clicked:
-            print(f"Cell clicked: {cell_clicked}")  # Check terminal output
-            return [cell_clicked]
+            print(f"Cell clicked: {cell_clicked}")  # Debug output
+            
+            # Extract station from rowData or use rowIndex to get it from pivot_table
+            station = ''
+            if 'rowData' in cell_clicked:
+                # Try different possible keys for station
+                row_data = cell_clicked['rowData']
+                station = row_data.get('Station', row_data.get('station', ''))
+            
+            # If still no station, try using rowIndex
+            if not station and 'rowIndex' in cell_clicked:
+                row_idx = cell_clicked['rowIndex']
+                if row_idx < len(pivot_table):
+                    station = pivot_table.iloc[row_idx]['Station']
+            
+            transformed_cell = {
+                'station': station,
+                'variable': cell_clicked.get('colId', ''),
+                'value': cell_clicked.get('value', 0)
+            }
+            print(f"Transformed cell: {transformed_cell}")
+            
+            return [transformed_cell]
         return []
+
+    """Register all callbacks for the data availability table application"""
+    
+    # Use AG-Grid's native selection events instead of polling
+    clientside_callback(
+        """
+        function(cellClicked, cellValueChanged) {
+            try {
+                // Only proceed if we have a grid API available
+                if (typeof window.dash_ag_grid === 'undefined') {
+                    return dash_clientside.no_update;
+                }
+                
+                const gridApi = window.dash_ag_grid.getApi("nan-percentage-aggrid");
+                if (!gridApi) {
+                    return dash_clientside.no_update;
+                }
+                
+                let cellData = [];
+                
+                // Get cell ranges (for Ctrl+click and drag selections)
+                const selectedRanges = gridApi.getCellRanges();
+                if (selectedRanges && selectedRanges.length > 0) {
+                    selectedRanges.forEach(range => {
+                        const startRow = Math.min(range.startRow.rowIndex, range.endRow.rowIndex);
+                        const endRow = Math.max(range.startRow.rowIndex, range.endRow.rowIndex);
+                        
+                        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+                            const rowNode = gridApi.getDisplayedRowAtIndex(rowIndex);
+                            if (rowNode) {
+                                range.columns.forEach(column => {
+                                    const colKey = column.getColId();
+                                    if (colKey !== 'Station') {
+                                        const value = rowNode.data[colKey];
+                                        const station = rowNode.data['Station'];
+                                        cellData.push({
+                                            row: rowIndex,
+                                            station: station,
+                                            variable: colKey,
+                                            value: value,
+                                            type: 'range'
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+                
+                return cellData;
+                
+            } catch (error) {
+                console.log('Error getting selection:', error);
+                return [];
+            }
+        }
+        """,
+        Output("selected-cells-store", "data"),
+        [Input("nan-percentage-aggrid", "cellClicked"),
+         Input("nan-percentage-aggrid", "cellValueChanged")],
+        prevent_initial_call=True
+    )
 
     # Main callback for handling selection changes and updating info and graph
     @app.callback(
