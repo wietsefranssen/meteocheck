@@ -6,7 +6,7 @@ def create_aggrid_datatable(pivot_table, check_table):
     
     # Prepare column definitions for AgGrid
     columnDefs = [
-        {"headerName": "Station", "field": "Station", "sortable": True, "filter": False, "suppressMenu": True, "pinned": "left"},
+        {"headerName": "Station", "field": "Station", "sortable": True, "filter": False, "suppressMenu": True, "pinned": "left", "width": 120},  # Keep Station column wider
     ]
     
     # Add variable columns with conditional formatting in check_table order
@@ -16,9 +16,10 @@ def create_aggrid_datatable(pivot_table, check_table):
                 "headerName": col, 
                 "field": col, 
                 "sortable": True, 
-                "filter": False,  # Disable filter to remove menu icons
-                "suppressMenu": True,  # Explicitly suppress menu for each column
+                "filter": False,
+                "suppressMenu": True,
                 "type": "numericColumn",
+                "width": 80,  # Smaller width for data columns
                 "cellStyle": {
                     "styleConditions": [
                         {
@@ -44,8 +45,7 @@ def create_aggrid_datatable(pivot_table, check_table):
         columnDefs=columnDefs,
         rowData=pivot_table.to_dict('records'),
         defaultColDef={
-            "minWidth": 80,  # Reduced from 100
-            "width": 90,     # Set fixed width instead of flex
+            "minWidth": 60,     # Smaller minimum for data columns
             "editable": False,
             "resizable": True
         },
