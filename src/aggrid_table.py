@@ -68,6 +68,9 @@ def create_aggrid_datatable(pivot_table, check_table):
             "cellSelection.suppressMultiRanges": False,  # Allow multiple ranges in cell selection
             # "enableRangeHandle": True,  # Enable drag handle for range selection
             "cellSelection.handle": True,  # Enable cell selection handles
+            "enableRangeSelection": True,
+            "enableCellSelection": True,
+            "suppressRowClickSelection": True,
         },
         style={"width": "100%"},
     )
