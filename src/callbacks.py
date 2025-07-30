@@ -53,15 +53,18 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
     # Cell selection callback
     @app.callback(
         Output("selected-cells-store", "data"),
-        [Input("nan-percentage-aggrid", "cellClicked"),
-         Input("nan-percentage-aggrid", "selectedCells")],
+        [Input("nan-percentage-aggrid", "cellClicked")],
+        [State("selected-cells-store", "data")],
         prevent_initial_call=True
     )
-    def handle_cell_selection(cell_clicked, selected_cells):
-        # Handle both single clicks and multi-selection
-        all_cells = []
+    def handle_cell_selection(cell_clicked, current_selection):
+        # Handle cell clicks and maintain selection state
+        if not current_selection:
+            current_selection = []
         
-        # Add single clicked cell
+        all_cells = list(current_selection)  # Copy existing selection
+        
+        # Add clicked cell if it's not a Station column
         if cell_clicked and cell_clicked.get('colId') != 'Station':
             station = ''
             if 'rowData' in cell_clicked:
@@ -69,29 +72,23 @@ def register_callbacks(app, pivot_table, check_table, nan_table, data_df):
             elif 'rowIndex' in cell_clicked and cell_clicked['rowIndex'] < len(pivot_table):
                 station = pivot_table.iloc[cell_clicked['rowIndex']]['Station']
             
-            all_cells.append({
+            new_cell = {
                 'station': station,
                 'variable': cell_clicked.get('colId', ''),
                 'value': cell_clicked.get('value', 0),
                 'type': 'single'
-            })
-        
-        # Add selected range cells
-        if selected_cells:
-            for cell in selected_cells:
-                if cell.get('colId') != 'Station':
-                    station = ''
-                    if 'rowData' in cell:
-                        station = cell['rowData'].get('Station', '')
-                    elif 'rowIndex' in cell and cell['rowIndex'] < len(pivot_table):
-                        station = pivot_table.iloc[cell['rowIndex']]['Station']
-                    
-                    all_cells.append({
-                        'station': station,
-                        'variable': cell.get('colId', ''),
-                        'value': cell.get('value', 0),
-                        'type': 'range'
-                    })
+            }
+            
+            # Check if this cell is already selected (toggle behavior)
+            cell_key = f"{station}_{cell_clicked.get('colId', '')}"
+            existing_cells = [cell for cell in all_cells if f"{cell.get('station', '')}_{cell.get('variable', '')}" == cell_key]
+            
+            if existing_cells:
+                # Remove if already selected (toggle off)
+                all_cells = [cell for cell in all_cells if f"{cell.get('station', '')}_{cell.get('variable', '')}" != cell_key]
+            else:
+                # Add if not selected
+                all_cells.append(new_cell)
         
         return all_cells
 
