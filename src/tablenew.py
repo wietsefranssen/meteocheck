@@ -42,43 +42,28 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
                 if actual_sensor_id and actual_sensor_id in data_df.columns:
                     # Calculate data availability percentage (100 - NaN percentage)
                     sensor_data = data_df.select(pl.col(actual_sensor_id))
-                    if "datetime" in data_df.columns:
-                        # Join datetime to sensor_data
-                        sensor_data = data_df.select([pl.col("datetime"), pl.col(actual_sensor_id)])
-                        # Filter out nulls
-                        non_null_data = sensor_data.filter(pl.col(actual_sensor_id).is_not_null())
-                        if non_null_data.height > 0:
-                            # Check if all minutes are 0 or 30
-                            is_30min = non_null_data["datetime"].dt.minute().is_in([0, 30]).all()
-                            if is_30min:
-                                # Only count expected 30-min intervals
-                                expected = sensor_data.filter(
-                                    pl.col("datetime").dt.minute().is_in([0, 30])
-                                )
-                                nan_count = expected.select(pl.col(actual_sensor_id).is_null()).sum().item()
-                                data_availability = ((total_rows - nan_count) / total_rows) * 100
-                                reason = 'Data_available'
 
-                            else:
-                                nan_count = sensor_data.select(pl.col(actual_sensor_id).is_null()).sum().item()
-                                data_availability = ((total_rows - nan_count) / total_rows) * 100
-                                reason = 'Data_available'
-                        else:
-                            nan_count = 0
-                            data_availability = ((total_rows - nan_count) / total_rows) * 100
-                            reason = '3Data_available'
+                    # Join datetime to sensor_data
+                    sensor_data = data_df.select([pl.col("datetime"), pl.col(actual_sensor_id)])
+                    # Filter out nulls
+                    non_null_data = sensor_data.filter(pl.col(actual_sensor_id).is_not_null())
+
+                    # Check if all minutes are 0 or 30
+                    is_30min = non_null_data["datetime"].dt.minute().is_in([0, 30]).all()
+                    if is_30min:
+                        # Only count expected 30-min intervals
+                        expected = sensor_data.filter(
+                            pl.col("datetime").dt.minute().is_in([0, 30])
+                        )
+                        nan_count = expected.select(pl.col(actual_sensor_id).is_null()).sum().item()
+                        data_availability = ((total_rows - nan_count) / total_rows) * 100
+                        reason = 'Data_available'
+
                     else:
-                        # Fallback: just count non-nulls
-                        total = sensor_data.height
                         nan_count = sensor_data.select(pl.col(actual_sensor_id).is_null()).sum().item()
                         data_availability = ((total_rows - nan_count) / total_rows) * 100
-                        reason = '3Data_available'
+                        reason = 'Data_available'
 
-                    # # Calculate data availability percentage (100 - NaN percentage)
-                    # sensor_data = data_df.select(pl.col(actual_sensor_id))
-                    # nan_count = sensor_data.null_count().item(0, 0)
-                    # data_availability = ((total_rows - nan_count) / total_rows) * 100
-                    # reason = 'Data_available'
                 else:
                     # Sensor not found in data
                     data_availability = 0.0
