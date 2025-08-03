@@ -7,7 +7,7 @@ from src.tablenew import create_nan_percentage_table
 from src.callbacks import register_callbacks
 from src.aggrid_table import create_aggrid_datatable
 from src.layout import create_app_layout
-from src.data_processing import process_data, create_pivot_table
+from src.data_processing import process_data, create_pivot_table, create_pivot_table_reason
 # from src.table import get_cell_values_and_colors, get_datatable #, generate_color_rules_and_css
 from data_manager import DataManager
 import plotly.graph_objects as go
@@ -58,6 +58,9 @@ def download_and_compare_data(application='standalone'):
     # Create pivot table for AgGrid display
     pivot_table = create_pivot_table(nan_table)
 
+    # Create pivot table for AgGrid display
+    pivot_table_reason = create_pivot_table_reason(nan_table)
+
     # Dash app
     if application=='standalone':
         app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc_css])
@@ -67,8 +70,8 @@ def download_and_compare_data(application='standalone'):
     else:
         app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc_css])
 
-    # Create AgGrid DataTable
-    aggrid_datatable = create_aggrid_datatable(pivot_table, check_table)
+    # Create AgGrid DataTable, now passing pivot_table_reason for extra coloring
+    aggrid_datatable = create_aggrid_datatable(pivot_table, check_table, pivot_table_reason)
 
     # Create app layout
     app.layout = create_app_layout(dm, data_df, aggrid_datatable, pivot_table)

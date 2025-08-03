@@ -27,6 +27,7 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
                 # No sensor for this variable at this station
                 data_availability = 0.0
                 actual_sensor_id = ''
+                reason = 'No_sensor'
             else:
                 # Map sensor_name to sensor_id
                 actual_sensor_id = sensor_name_to_id.get(sensor_name, '')
@@ -36,16 +37,19 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
                     sensor_data = data_df.select(pl.col(actual_sensor_id))
                     nan_count = sensor_data.null_count().item(0, 0)
                     data_availability = ((total_rows - nan_count) / total_rows) * 100
+                    reason = 'Data_available'
                 else:
                     # Sensor not found in data
                     data_availability = 0.0
+                    reason = 'Sensor_not_found'
             
             results.append({
                 'Station': station,
                 'Variable': var_name,
                 'Sensor_Name': sensor_name if not pd.isna(sensor_name) else '',
                 'Sensor_ID': actual_sensor_id,
-                'NaN_Percentage': round(data_availability, 1)
+                'NaN_Percentage': round(data_availability, 1),
+                'Reason': reason,
             })
 
     return pd.DataFrame(results)

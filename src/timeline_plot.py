@@ -215,7 +215,7 @@ def create_multi_timeline_plot(data_df, selected_cells, check_table, nan_table, 
                 y=plot_data[sensor_id],
                 mode='lines+markers',
                 name=f'{station} - {variable}',
-                line=dict(width=2, color=color),
+                line=dict(width=.5, color=color),
                 marker=dict(size=4, color=color),
                 hovertemplate=f'<b>{station} - {variable}</b><br>' +
                              'Time: %{x}<br>' +
