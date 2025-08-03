@@ -7,10 +7,6 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
     # Calculate total number of data points
     total_rows = len(data_df)
     
-    # Create mapping from sensor_name to sensor_id
-    sensor_name_to_id = {}
-    for row in sensorinfo_df.iter_rows(named=True):
-        sensor_name_to_id[row['sensor_name']] = str(row['sensor_id'])
     
     # Initialize results list
     results = []
@@ -19,6 +15,17 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
     for _, row in check_table.iterrows():
         station = row['station']
         
+        # Select sensor_ids from sensorinfo_df for this station
+        sensorinfo_df_station = sensorinfo_df.filter(pl.col('site_name') == station)
+        if sensorinfo_df_station.height == 0:
+            print(f"Warning: No sensor info found for station {station}. Skipping.")
+            continue
+        
+        # Create mapping from sensor_name to sensor_id
+        sensor_name_to_id = {}
+        for sensor_row in sensorinfo_df_station.iter_rows(named=True):
+            sensor_name_to_id[sensor_row['sensor_name']] = str(sensor_row['sensor_id'])
+
         # Get all sensor columns for this station (excluding station and source columns)
         for var_name in check_table.columns[2:]:  # Skip 'station' and 'source' columns
             sensor_name = row[var_name]  # This is actually sensor_name from check_table
