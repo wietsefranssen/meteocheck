@@ -7,7 +7,7 @@ from src.tablenew import create_sensor_issue_table
 from src.callbacks import register_callbacks
 from src.aggrid_table import create_aggrid_datatable
 from src.layout import create_app_layout
-from src.data_processing import process_data, create_pivot_table, create_pivot_table_reason
+from src.data_processing import create_pivot_table, create_pivot_table_reason
 # from src.table import get_cell_values_and_colors, get_datatable #, generate_color_rules_and_css
 from data_manager import DataManager
 import plotly.graph_objects as go
@@ -48,9 +48,6 @@ def download_and_compare_data(application='standalone'):
     var_names = check_table.columns[2:].tolist()
     site_names = check_table['station'].unique().tolist()
     site_names.sort()
-    
-    # Process and clean data
-    # data_df, sensorinfo_df = process_data(data_df, sensorinfo_df)
 
     # Create the data availability percentage table
     nan_table = create_sensor_issue_table(data_df, sensorinfo_df, check_table)
