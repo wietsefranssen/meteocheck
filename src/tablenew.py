@@ -1,8 +1,12 @@
 import pandas as pd
 import polars as pl
 
+
+### 
+
+
 # Create data availability percentage table
-def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
+def create_sensor_issue_table(data_df, sensorinfo_df, check_table):
     """Create a table showing percentage of available data (non-NaN) per location and sensor type"""
     # Calculate total number of data points
     total_rows = len(data_df)
@@ -19,7 +23,7 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
         sensorinfo_df_station = sensorinfo_df.filter(pl.col('site_name') == station)
         if sensorinfo_df_station.height == 0:
             print(f"Warning: No sensor info found for station {station}. Skipping.")
-            continue
+            # continue
         
         # Create mapping from sensor_name to sensor_id
         sensor_name_to_id = {}
@@ -30,44 +34,48 @@ def create_nan_percentage_table(data_df, sensorinfo_df, check_table):
         for var_name in check_table.columns[2:]:  # Skip 'station' and 'source' columns
             sensor_name = row[var_name]  # This is actually sensor_name from check_table
             
+            # Check if sensor is to be checked (is NaN or empty in check_table)
             if pd.isna(sensor_name) or sensor_name == '':
                 # No sensor for this variable at this station
                 data_availability = 0.0
                 actual_sensor_id = ''
-                reason = 'No_sensor'
+                reason = 'N/A' # Not checked
             else:
                 # Map sensor_name to sensor_id
                 actual_sensor_id = sensor_name_to_id.get(sensor_name, '')
                 
-                if actual_sensor_id and actual_sensor_id in data_df.columns:
+                if actual_sensor_id in data_df.columns:
                     # Calculate data availability percentage (100 - NaN percentage)
-                    sensor_data = data_df.select(pl.col(actual_sensor_id))
-
-                    # Join datetime to sensor_data
                     sensor_data = data_df.select([pl.col("datetime"), pl.col(actual_sensor_id)])
+                    
                     # Filter out nulls
                     non_null_data = sensor_data.filter(pl.col(actual_sensor_id).is_not_null())
 
-                    # Check if all minutes are 0 or 30
-                    is_30min = non_null_data["datetime"].dt.minute().is_in([0, 30]).all()
-                    if is_30min:
-                        # Only count expected 30-min intervals
-                        expected = sensor_data.filter(
-                            pl.col("datetime").dt.minute().is_in([0, 30])
-                        )
-                        nan_count = expected.select(pl.col(actual_sensor_id).is_null()).sum().item()
-                        data_availability = ((total_rows - nan_count) / total_rows) * 100
-                        reason = 'Data_available'
-
+                    if non_null_data.height == 0:
+                        # No data available for this sensor
+                        data_availability = 0.0
+                        reason = 'ND'
                     else:
-                        nan_count = sensor_data.select(pl.col(actual_sensor_id).is_null()).sum().item()
-                        data_availability = ((total_rows - nan_count) / total_rows) * 100
-                        reason = 'Data_available'
+                        # Check if all minutes are 0 or 30
+                        is_30min = non_null_data["datetime"].dt.minute().is_in([0, 30]).all()
+                        if is_30min:
+                            # Only count expected 30-min intervals
+                            expected = sensor_data.filter(
+                                pl.col("datetime").dt.minute().is_in([0, 30])
+                            )
+                            nan_count = expected.select(pl.col(actual_sensor_id).is_null()).sum().item()
+                            data_availability = ((total_rows - nan_count) / total_rows) * 100
+                            reason = 'OK'
+
+                        else:
+                            nan_count = sensor_data.select(pl.col(actual_sensor_id).is_null()).sum().item()
+                            data_availability = ((total_rows - nan_count) / total_rows) * 100
+                            reason = 'OK'
 
                 else:
-                    # Sensor not found in data
+                    # Sensor not found in database
                     data_availability = 0.0
-                    reason = 'Sensor_not_found'
+                    reason = 'NF' # No sensor found in database
             
             results.append({
                 'Station': station,

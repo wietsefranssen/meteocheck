@@ -1,7 +1,6 @@
 import dash_ag_grid as dag
 import numpy as np  # Add this import at the top if not present
 
-
 def create_aggrid_datatable(pivot_table, check_table, pivot_table_reason=None):
     """Create an ag-Grid DataTable for data availability percentages"""
     
@@ -14,19 +13,30 @@ def create_aggrid_datatable(pivot_table, check_table, pivot_table_reason=None):
     for col in check_table.columns[2:]:  # Use check_table column order
         if col in pivot_table.columns:  # Only add if column exists in pivot_table
             style_conditions = [
-                # Specific color for 'No_sensor'
+                # Specific color for 'N/A' (not checked)
                 {
-                    "condition": f"params.data['{col}_reason'] === 'No_sensor'",
-                    "style": {"backgroundColor": "#C2C2C2", "color": "black"}  # Gray for No_sensor
+                    "condition": f"params.data['{col}_reason'] === 'N/A'",
+                    "style": {"backgroundColor": "#d4edda", "color": "black"}
                 },
-                # Specific color for 'Sensor_not_found'
+                # Specific color for 'NF' (no sensor found in database)
                 {
-                    "condition": f"params.data['{col}_reason'] === 'Sensor_not_found'",
-                    "style": {"backgroundColor": "#7A7A7A", "color": "black"}  # Light red for Sensor_not_found
+                    "condition": f"params.data['{col}_reason'] === 'NF'",
+                    # "style": {"backgroundColor": "transparent", "color": "black"}  # Light red for NF
+                    "style": {"backgroundColor": "#C2C2C2", "color": "black"}  # Light red for NF
                 },
-                # Generic color for any other reason (except Data_available)
+                # Specific color for 'ND' (no data available)
                 {
-                    "condition": f"params.data['{col}_reason'] && params.data['{col}_reason'] !== 'Data_available'",
+                    "condition": f"params.data['{col}_reason'] === 'ND'",
+                    "style": {"backgroundColor": "#ff8690", "color": "black"}  # Light red for ND
+                },
+                {
+                    "condition": f"params.data['{col}_reason'] === 'NF'",
+                    # "style": {"backgroundColor": "transparent", "color": "black"}  # Light red for NF
+                    "style": {"backgroundColor": "#C2C2C2", "color": "black"}  # Light red for NF
+                },
+                # Generic color for any other reason (except OK)
+                {
+                    "condition": f"params.data['{col}_reason'] !== 'OK'",
                     "style": {"backgroundColor": "#ff27a9", "color": "black"}  # Light blue for other reasons
                 },
                 # Normal coloring for data availability
@@ -60,6 +70,8 @@ def create_aggrid_datatable(pivot_table, check_table, pivot_table_reason=None):
                 "width": 80,
                 "cellStyle": {
                     "styleConditions": style_conditions
+                },
+                "cellDataType": "text"
                 # },
                 # "valueFormatter": {
                 #     "function": f"""
@@ -70,7 +82,7 @@ def create_aggrid_datatable(pivot_table, check_table, pivot_table_reason=None):
                 #             return params.value;
                 #         }}
                 #     """
-                }
+                # }
             })
     
     # Before passing to AgGrid, merge reason columns into rowData if pivot_table_reason is provided
@@ -82,8 +94,13 @@ def create_aggrid_datatable(pivot_table, check_table, pivot_table_reason=None):
                 reason = reason_row[key]
                 row[f"{key}_reason"] = reason
                 # Remove value for No_sensor and Sensor_not_found
-                if reason in ['No_sensor', 'Sensor_not_found']:
-                    row[key] = None  # or np.nan
+                if reason in ['N/A']:
+                    row[key] = '-'
+                    # row[key] = None
+                elif reason in ['NF']:
+                    row[key] = 'NF'
+                elif reason in ['ND']:
+                    row[key] = 'ND'
 
     return dag.AgGrid(
         enableEnterpriseModules=True,

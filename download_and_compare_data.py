@@ -3,7 +3,7 @@ import dash
 from dash import Dash, dcc, html, Input, Output, State, clientside_callback
 from src.plot import make_figure  
 from src.corrections import find_incorrect_airpressure_sensors, correct_airpressure_units 
-from src.tablenew import create_nan_percentage_table
+from src.tablenew import create_sensor_issue_table
 from src.callbacks import register_callbacks
 from src.aggrid_table import create_aggrid_datatable
 from src.layout import create_app_layout
@@ -50,10 +50,10 @@ def download_and_compare_data(application='standalone'):
     site_names.sort()
     
     # Process and clean data
-    data_df, sensorinfo_df = process_data(data_df, sensorinfo_df)
+    # data_df, sensorinfo_df = process_data(data_df, sensorinfo_df)
 
     # Create the data availability percentage table
-    nan_table = create_nan_percentage_table(data_df, sensorinfo_df, check_table)
+    nan_table = create_sensor_issue_table(data_df, sensorinfo_df, check_table)
     
     # Create pivot table for AgGrid display
     pivot_table = create_pivot_table(nan_table)
