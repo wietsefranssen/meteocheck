@@ -29,9 +29,11 @@ def download_and_compare_data(application='standalone'):
     dm.set_data_path(os.path.join(basepath, 'data'))
     dm.set_temp_path(os.path.join(basepath, 'temp'))
 
-    dm.set_dates(days_back=7, offset=1)
-    dm.set_dates(start_dt='2025-07-22', end_dt='2025-07-29 23:58:00')
+    # dm.set_dates(days_back=7, offset=1)
+    dm.set_dates(start_dt='2025-07-25', end_dt='2025-08-01 23:59:00')
     print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
+
+    dm.set_load_from_disk(True)
 
     dm.download_or_load_data()
     data_df, sensorinfo_df = dm.get_data()

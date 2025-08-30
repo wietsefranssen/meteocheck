@@ -42,7 +42,10 @@ class DataManager:
             offset=offset,
             tz=tz
         )
-        
+
+    def set_load_from_disk(self, load_from_disk=False):
+        self.load_from_disk = load_from_disk
+
     def set_meta_path(self, path):
         self.meta_path = path
         self.check_table_filename = os.path.join(path, 'check_table_base.csv')
@@ -92,7 +95,7 @@ class DataManager:
     def load_check_table(self):
         self.check_table = pd.read_csv(self.check_table_filename, sep=';')
 
-    def download_or_load_data(self):
+    def download_or_load_data(self, load_from_disk=False):
         self.load_check_table()
         download_data = check_if_download_data_needed(
             self.last_retrieval_info_file,
@@ -103,11 +106,12 @@ class DataManager:
             self.data_df_file,
             self.sensorinfo_df_file
         )
-        if download_data:
-            self.sensorinfo_df, self.data_df = get_data_from_db(
-                start_dt=self.start_dt,
-                end_dt=self.end_dt,
-                check_table_filename=self.check_table_filename
+        if not load_from_disk:
+            if download_data:
+                self.sensorinfo_df, self.data_df = get_data_from_db(
+                    start_dt=self.start_dt,
+                    end_dt=self.end_dt,
+                    check_table_filename=self.check_table_filename
             )
             # Save as Polars parquet files
             if self.data_df is not None and self.data_df.height > 0:
