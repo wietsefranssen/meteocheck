@@ -95,7 +95,7 @@ class DataManager:
     def load_check_table(self):
         self.check_table = pd.read_csv(self.check_table_filename, sep=';')
 
-    def download_or_load_data(self, load_from_disk=False):
+    def download_or_load_data(self):
         self.load_check_table()
         download_data = check_if_download_data_needed(
             self.last_retrieval_info_file,
@@ -106,7 +106,7 @@ class DataManager:
             self.data_df_file,
             self.sensorinfo_df_file
         )
-        if not load_from_disk:
+        if not self.load_from_disk:
             if download_data:
                 self.sensorinfo_df, self.data_df = get_data_from_db(
                     start_dt=self.start_dt,
