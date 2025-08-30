@@ -24,13 +24,16 @@ def create_app_layout(dm, data_df, aggrid_datatable, pivot_table):
                 ], className="mb-3", style={"fontSize": "14px", "color": "#6c757d", "fontStyle": "italic"}),
                 html.P([
                     f"Data period: {dm.start_dt.strftime('%Y-%m-%d %H:%M')} to {dm.end_dt.strftime('%Y-%m-%d %H:%M')} "
-                    f"({len(data_df)} data points)"
+                    f"({len(data_df)*len(data_df.columns)} data points ({len(data_df)} timestamps x {len(data_df.columns)} variables/locations))"
                 ], className="mb-2", style={"fontSize": "14px", "color": "gray"}),
                 html.P([
                     "This table shows the percentage of available data for each sensor at each station. ",
                     html.Span("Green", style={'color': '#28a745', 'fontWeight': 'bold'}), " indicates good data availability (>80%), ",
                     html.Span("Yellow", style={'color': '#ffc107', 'fontWeight': 'bold'}), " indicates moderate data availability (30-80%), and ",
-                    html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates poor data availability (<30%)."
+                    html.Span("Red", style={'color': '#dc3545', 'fontWeight': 'bold'}), " indicates poor data availability (<30%), ",
+                    html.Span("ND", style={'color': 'red', 'fontWeight': 'bold'}), " indicates no data found in database, ",
+                    html.Span("NF", style={'color': '#6c757d', 'fontWeight': 'bold'}), " indicates sensor not found in database, ",
+                    html.Span("-", style={'color': 'green', 'fontWeight': 'bold'}), " indicates data not checked (defined in checktable)."
                 ], className="mb-3"),
                 aggrid_datatable,
                 html.Div(id="selection-info", className="mt-3 mb-3"),
