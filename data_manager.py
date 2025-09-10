@@ -33,7 +33,7 @@ class DataManager:
         self.data_df = None
         self.sensorinfo_df = None
         self.check_table = None
-
+        self.load_from_disk = False
         # Always use set_dates to initialize dates
         self.set_dates(
             start_dt=start_dt,
