@@ -38,6 +38,12 @@ def download_and_compare_data(application='standalone'):
     dm.download_or_load_data()
     data_df, sensorinfo_df = dm.get_data()
 
+    ## Determine start and end dates from data if not set
+    min_date = data_df['datetime'].min()
+    max_date = data_df['datetime'].max()
+    dm.start_dt = pd.to_datetime(min_date)
+    dm.end_dt = pd.to_datetime(max_date)
+    print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
     # Detect and correct air pressure sensors with wrong units
     incorrect_sensors = find_incorrect_airpressure_sensors(sensorinfo_df, data_df)
