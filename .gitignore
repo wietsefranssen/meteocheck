@@ -15,6 +15,9 @@ dev_info/
 # Debugging and testing vscode
 tempCodeRunnerFile.py
 
+# Env
+.venv
+
 # Editors
 .vscode/
 .idea/
