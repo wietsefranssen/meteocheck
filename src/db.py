@@ -1,7 +1,7 @@
 from get_dbstring import get_dbstring
 from config import load_config
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.general import get_check_table
 import polars as pl
 from sqlalchemy import create_engine, Engine
@@ -49,10 +49,10 @@ def get_data_from_db(start_dt=None, end_dt=None, check_table_filename='check_tab
     data_df_wur = pl.DataFrame()
     
     # Get data from the database
-    sensorinfo_df_wur, data_df_wur = get_data(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
+    sensorinfo_df_wur, data_df_wur = get_data_in_chunks(check_table[check_table['source'] == 'wur_db'], start_dt, end_dt, source='wur_db')
     
     # Get data from the database
-    sensorinfo_df_vu, data_df_vu = get_data(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt, source='vu_db')
+    sensorinfo_df_vu, data_df_vu = get_data_in_chunks(check_table[check_table['source'] == 'vu_db'], start_dt, end_dt, source='vu_db')
 
     # Check if data_df_wur and data_df_vu are None or empty
     if data_df_wur is None or data_df_wur.height == 0:
@@ -407,4 +407,40 @@ def get_data(check_table, start_dt, end_dt, source='wur_db', limit=None):
     # Rename 'dt' column to 'datetime'
     data_df = data_df.rename({'dt': 'datetime'})
     
+    return sensorinfo_df, data_df
+
+def get_data_in_chunks(check_table, start_dt, end_dt, source='wur_db', chunk_timedelta=timedelta(hours=6), limit=None):
+    """
+    Download data from the database in chunks (e.g., daily or hourly).
+    Returns concatenated sensorinfo_df and data_df.
+    Logs each chunk's download progress.
+    """
+    all_data_dfs = []
+    all_sensorinfo_dfs = []
+    current_start = start_dt
+    chunk_idx = 1
+
+    while current_start < end_dt:
+        current_end = min(current_start + chunk_timedelta, end_dt)
+        print(f"[Chunk {chunk_idx}] Downloading: {current_start} to {current_end} ...")
+        sensorinfo_df, data_df = get_data(check_table, current_start, current_end, source=source, limit=limit)
+        print(f"[Chunk {chunk_idx}] Data rows: {data_df.height if data_df is not None else 0}, Sensorinfo rows: {sensorinfo_df.height if sensorinfo_df is not None else 0}")
+        if data_df is not None and data_df.height > 0:
+            all_data_dfs.append(data_df)
+        if sensorinfo_df is not None and sensorinfo_df.height > 0:
+            all_sensorinfo_dfs.append(sensorinfo_df)
+        current_start = current_end
+        chunk_idx += 1
+
+    # Concatenate all chunks
+    if all_data_dfs:
+        data_df = pl.concat(all_data_dfs)
+    else:
+        data_df = pl.DataFrame()
+    if all_sensorinfo_dfs:
+        sensorinfo_df = pl.concat(all_sensorinfo_dfs).unique()
+    else:
+        sensorinfo_df = pl.DataFrame()
+
+    print(f"Finished downloading {chunk_idx-1} chunks. Total data rows: {data_df.height}, Total sensorinfo rows: {sensorinfo_df.height}")
     return sensorinfo_df, data_df

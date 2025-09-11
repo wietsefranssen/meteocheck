@@ -15,24 +15,13 @@ def download_data():
     dm.set_data_path(os.path.join(basepath, 'data'))
     dm.set_temp_path(os.path.join(basepath, 'temp'))
 
-    dm.set_dates(days_back=7, offset=1)
+    dm.set_dates(days_back=2, offset=1)
     # dm.set_dates(start_dt='2025-07-25', end_dt='2025-08-01 23:59:00')
     print(f"start_dt: {dm.start_dt}, end_dt: {dm.end_dt}")
 
     # dm.set_load_from_disk(True)
 
     dm.download_or_load_data()
-    data_df, sensorinfo_df = dm.get_data()
-
-
-    # # Detect and correct air pressure sensors with wrong units
-    # incorrect_sensors = find_incorrect_airpressure_sensors(sensorinfo_df, data_df)
-    # if incorrect_sensors:
-    #     print("Correcting air pressure sensors:", incorrect_sensors)
-    #     data_df, sensorinfo_df = correct_airpressure_units(data_df, sensorinfo_df, incorrect_sensors)
-
-    
-    
 
 if __name__ == "__main__":
     download_data()
